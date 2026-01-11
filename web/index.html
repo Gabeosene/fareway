@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silent Photon | Command Center</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Libs -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- Map Background -->
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+    <!-- 1. Top Control Bar (Simulation Time & Speed) -->
+    <!-- Note: We make this a 'window' but with a specific ID to start at top center -->
+    <div id="sim-controls" class="window active"
+        style="top: 20px; left: 50%; transform: translateX(-50%); width: auto; min-width: 400px; height: 60px; border-radius: 30px;">
+        <div class="window-content"
+            style="display: flex; align-items: center; justify-content: space-between; height: 100%; padding: 0 20px; overflow: hidden;">
+
+            <div class="control-group">
+                <div class="time-display" id="sim-time">00:00</div>
+            </div>
+
+            <div class="control-group">
+                <button class="icon-btn" id="btn-pause" title="Pause"><svg width="12" height="12" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg></button>
+                <button class="icon-btn active" id="btn-play" title="Play"><svg width="12" height="12"
+                        viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                    </svg></button>
+                <button class="icon-btn" id="btn-step" title="Step Frame"><svg width="12" height="12"
+                        viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                    </svg></button>
+            </div>
+
+            <div class="control-group">
+                <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 8px;"></div>
+                <button class="icon-btn speed-btn active" id="btn-speed-1">1x</button>
+                <button class="icon-btn speed-btn" id="btn-speed-2">2x</button>
+                <button class="icon-btn speed-btn" id="btn-speed-5">5x</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 2. HUD / Network Status (Left Panel) -->
+    <div id="hud-panel" class="window active" style="top: 100px; right: 20px; width: 320px; height: 500px;">
+        <div class="window-header">
+            <div class="window-title">
+                <span style="color:var(--success)">●</span> Network Status
+            </div>
+            <div class="window-controls">
+                <button class="win-btn minimize"></button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="stat-row">
+                <span class="stat-label">Weather State</span>
+                <span class="stat-value" id="weather-display" style="color: #ffcc00">SUNNY</span>
+            </div>
+
+            <div style="margin-top: 16px;">
+                <h3 style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">God Mode Controls</h3>
+                <div style="display: flex; gap: 4px;">
+                    <button class="btn" onclick="setWeather('SUNNY')">Sun</button>
+                    <button class="btn" onclick="setWeather('RAIN')">Rain</button>
+                    <button class="btn" onclick="setWeather('STORM')">Storm</button>
+                </div>
+                <button class="btn danger" style="margin-top: 8px;" onclick="triggerAccident()">⚠ Trigger
+                    Accident</button>
+            </div>
+
+            <div style="margin-top: 24px;">
+                <h3 style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Policy Agent</h3>
+                <div class="stat-row">
+                    <span class="stat-label">Sensitivity</span>
+                    <span class="stat-value" id="sens-display">5.0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Aggressiveness</span>
+                    <span class="stat-value" id="aggr-display">NORMAL</span>
+                </div>
+
+                <div style="height: 150px; margin-top: 10px;">
+                    <canvas id="mainChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Wallet / User Panel (Left Panel) -->
+    <div id="wallet-panel" class="window" style="top: 100px; left: 20px; width: 280px;">
+        <div class="window-header">
+            <div class="window-title">
+                <span style="color:var(--primary)">◈</span> User Simulation
+            </div>
+            <div class="window-controls">
+                <button class="win-btn minimize"></button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 10px; color: var(--text-muted);">ACTIVE USER</div>
+                <div style="font-size: 16px; font-weight: bold; margin-top: 4px;">Szabó Éva</div>
+                <div style="font-size: 11px; color: var(--secondary); margin-top: 2px;">EQUITY TIER</div>
+            </div>
+
+            <div class="stat-row" style="margin-top: 16px;">
+                <span class="stat-label">Wallet Balance</span>
+                <span class="stat-value" style="color: var(--success)">12,450 HUF</span>
+            </div>
+
+            <button class="btn primary" style="margin-top: 16px;">+ Generate Quote</button>
+            <p style="font-size: 10px; color: var(--text-muted); margin-top: 8px; text-align: center;">
+                Select a route on the map to calculate pricing.
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Logic -->
+    <script type="module" src="js/App.js"></script>
+
+</body>
+
+</html>

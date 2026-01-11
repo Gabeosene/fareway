@@ -1,0 +1,86 @@
+{
+    "network": {
+        "links": [
+            {
+                "id": "link_szechenyi",
+                "name": "Széchenyi Lánchíd (Chain Bridge)",
+                "capacity": 1200,
+                "base_price_huf": 500,
+                "type": "road"
+            },
+            {
+                "id": "link_erzsebet",
+                "name": "Erzsébet híd (Elizabeth Bridge)",
+                "capacity": 2500,
+                "base_price_huf": 300,
+                "type": "road"
+            },
+            {
+                "id": "link_margit",
+                "name": "Margit híd (Margaret Bridge)",
+                "capacity": 3000,
+                "base_price_huf": 300,
+                "type": "road"
+            },
+            {
+                "id": "link_szabadsag",
+                "name": "Szabadság híd (Liberty Bridge)",
+                "capacity": 1500,
+                "base_price_huf": 400,
+                "type": "road"
+            },
+            {
+                "id": "link_hungaria",
+                "name": "Hungária krt (Outer Ring)",
+                "capacity": 5000,
+                "base_price_huf": 100,
+                "type": "road"
+            },
+            {
+                "id": "link_m4",
+                "name": "Metro 4 (Kelenföld - Keleti)",
+                "capacity": 15000,
+                "base_price_huf": 450,
+                "type": "transit"
+            }
+        ]
+    },
+    "users": [
+        {
+            "id": "u_std",
+            "tier": "standard",
+            "balance_huf": 50000,
+            "name": "János (Commuter)"
+        },
+        {
+            "id": "u_eq",
+            "tier": "equity",
+            "balance_huf": 10000,
+            "name": "Eva (Student)"
+        },
+        {
+            "id": "u_flex",
+            "tier": "standard",
+            "balance_huf": 50000,
+            "name": "Zoltán (Flexible)"
+        }
+    ],
+    "policy": {
+        "equity_discount_percent": 50,
+        "congestion_target_ci": 0.85,
+        "price_sensitivity_factor": 5.0,
+        "reward_threshold_ci": 0.4,
+        "reward_amount_credits": 100,
+        "currency_symbol": "HUF"
+    },
+    "simulation": {
+        "tick_duration_sec": 1,
+        "quote_expiry_sec": 30,
+        "reservation_expiry_sec": 300,
+        "initial_flow": {
+            "link_szechenyi": 800,
+            "link_erzsebet": 1000,
+            "link_m4": 5000
+        }
+    }
+}
