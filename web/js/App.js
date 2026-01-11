@@ -97,6 +97,40 @@ class App {
         window.setWeather = async (w) => {
             await fetch(`${this.apiBase}/admin/weather/${w}`, { method: 'POST' });
         };
+
+        document.getElementById('btn-quote').onclick = () => this.generateQuote();
+    }
+
+    async generateQuote() {
+        // Hardcoded for demo simplicity as per UI "Active User: Szabó Éva"
+        const userId = "u_eq";
+        const linkId = "link_szechenyi"; // Default target
+
+        try {
+            const resp = await fetch(`${this.apiBase}/api/quote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, link_id: linkId })
+            });
+            const data = await resp.json();
+            console.log("Quote:", data);
+
+            // Update UI
+            document.getElementById('quote-result').style.display = 'block';
+            document.getElementById('quote-help').style.display = 'none';
+            document.getElementById('quote-price').innerText = `${data.final_price} HUF`;
+
+            const discEl = document.getElementById('quote-discount');
+            if (data.discount_amount > 0) {
+                discEl.innerText = `Saved ${data.discount_amount} HUF (Green Disc.)`;
+            } else {
+                discEl.innerText = 'Standard Rate';
+            }
+
+        } catch (e) {
+            console.error(e);
+            // alert("Error generating quote");
+        }
     }
 
     async sendControl(action, speed = null) {
@@ -160,39 +194,86 @@ class App {
             this.updateStats(data);
 
         } catch (e) {
-            // console.error(e);
+            console.error("Poll Error:", e);
         }
     }
 
     updateMap(links) {
         links.forEach(link => {
-            let poly = this.polylines[link.id];
+            let polyGroup = this.polylines[link.id];
 
-            if (!poly && link.coordinates && link.coordinates.length > 1) {
-                let weight = link.type === 'transit' ? 4 : (link.capacity > 2000 ? 6 : 4);
-
-                poly = L.polyline(link.coordinates, {
-                    color: '#444', weight: weight, opacity: 0.8, lineCap: 'round'
+            if (!polyGroup && link.coordinates && link.coordinates.length > 1) {
+                // 1. Glow Line (RESTORING NEON GLOW)
+                const glowColor = link.type === 'transit' ? '#a855f7' : (link.ci > 0.8 ? '#ff0055' : '#00f2ff');
+                const glow = L.polyline(link.coordinates, {
+                    color: glowColor,
+                    weight: link.type === 'transit' ? 8 : 12,
+                    opacity: 0.2,
+                    lineCap: 'round',
+                    className: 'glow-layer'
                 }).addTo(this.map);
 
-                this.polylines[link.id] = poly;
+                // 2. Core Line
+                let weight = link.type === 'transit' ? 3 : (link.capacity > 2000 ? 5 : 3);
+                const dash = link.type === 'transit' ? '5, 8' : null;
+
+                const core = L.polyline(link.coordinates, {
+                    color: '#444',
+                    weight: weight,
+                    opacity: 1.0,
+                    lineCap: 'round',
+                    dashArray: dash
+                }).addTo(this.map);
+
+                this.polylines[link.id] = { core: core, glow: glow };
+                polyGroup = this.polylines[link.id];
             }
 
-            if (!poly) return;
+            if (!polyGroup) return;
 
-            // Color Logic
+            // Color Logic Matches Style.css Neon
             let color = '#334155'; // Dark Grey (flow)
-            if (link.ci > 0.4) color = '#00f2ff'; // Cyan (Active)
-            if (link.ci > 0.6) color = '#ffcc00'; // Warning
-            if (link.ci > 0.8) color = '#ff0055'; // Danger
+            let glowColor = '#334155';
 
-            if (link.type === 'transit') color = '#a855f7'; // Purple
+            if (link.ci > 0.4) { color = '#00f2ff'; glowColor = '#00f2ff'; } // Cyan (Active)
+            if (link.ci > 0.6) { color = '#ffcc00'; glowColor = '#ffcc00'; } // Warning
+            if (link.ci > 0.8) { color = '#ff0055'; glowColor = '#ff0055'; } // Danger
 
-            poly.setStyle({
+            if (link.type === 'transit') {
+                color = '#a855f7';
+                glowColor = '#a855f7';
+            }
+
+            // Update Core
+            polyGroup.core.setStyle({
                 color: color,
-                weight: link.ci > 0.8 ? 6 : 4,
+                weight: link.ci > 0.8 ? 6 : (link.type === 'transit' ? 3 : 5),
                 opacity: link.ci > 0.1 ? 1.0 : 0.4
             });
+
+            // Update Glow
+            polyGroup.glow.setStyle({
+                color: glowColor,
+                opacity: link.ci > 0.1 ? 0.25 : 0.05
+            });
+
+            // Popup / Tooltip
+            const liveBadge = link.is_live ? '<span style="color:#00ff00; font-weight:bold;">[LIVE FEED]</span>' : '<span style="color:#888;">[SIMULATED]</span>';
+            const content = `
+                <div style="font-family: 'Courier New'; font-size: 12px;">
+                    <strong>${link.name}</strong><br/>
+                    ${liveBadge}<br/>
+                    Flow: ${link.flow} / ${link.capacity}<br/>
+                    CI: ${link.ci.toFixed(2)}<br/>
+                    Price: <b>${link.price} HUF</b>
+                </div>
+            `;
+
+            if (!polyGroup.core.getPopup()) {
+                polyGroup.core.bindPopup(content, { closeButton: false, autoPan: false });
+            } else {
+                polyGroup.core.setPopupContent(content);
+            }
         });
     }
 

@@ -1,33 +1,46 @@
 :root {
     --bg-color: #050505;
-    --glass-bg: rgba(10, 15, 25, 0.75);
+
+    /* premium glass vars */
+    --glass-bg: rgba(13, 17, 23, 0.65);
     --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-highlight: rgba(255, 255, 255, 0.05);
-    
-    --primary: #00f2ff;
-    --primary-dim: rgba(0, 242, 255, 0.1);
-    --secondary: #7000ff;
-    --danger: #ff0055;
-    --warning: #ffcc00;
-    --success: #00ff99;
-    
+    --glass-highlight: rgba(255, 255, 255, 0.03);
+    --glass-blur: 20px;
+
+    /* neon palette */
+    --primary: #0ea5e9;
+    /* Cyan */
+    --primary-glow: rgba(14, 165, 233, 0.4);
+    --accent: #f43f5e;
+    /* Rose/Pink */
+    --accent-glow: rgba(244, 63, 94, 0.4);
+    --success: #10b981;
+    /* Emerald */
+    --warning: #fbbf24;
+    /* Amber */
+
+    /* text */
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
-    --text-dark: #475569;
-    
-    --font-main: 'Inter', sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-    
-    --card-radius: 12px;
-    --shadow-main: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --text-dim: #475569;
+
+    /* fonts */
+    --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-data: 'JetBrains Mono', 'Fira Code', monospace;
+
+    --card-radius: 16px;
+    --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 
-* { box-sizing: border-box; }
+* {
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+}
 
 body {
     margin: 0;
     padding: 0;
-    font-family: var(--font-main);
+    font-family: var(--font-ui);
     background: var(--bg-color);
     color: var(--text-main);
     overflow: hidden;
@@ -35,156 +48,183 @@ body {
     width: 100vw;
 }
 
-/* --- Map Container --- */
+/* --- Map Layer --- */
 #map-container {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     z-index: 0;
 }
 
 #map {
     width: 100%;
     height: 100%;
-    filter: saturate(1.2) contrast(1.1);
+    /* Slight desaturation for the map to make UI pop */
+    filter: saturate(0.8) contrast(1.1) brightness(0.8);
 }
 
-/* Leaflet Dark Mode Tweaks */
-.leaflet-layer,
-.leaflet-control-zoom-in,
-.leaflet-control-zoom-out,
-.leaflet-control-attribution {
-  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+/* Vignette Overlay for "Tactical Display" feel */
+#map-container::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 40%, #050505 100%);
+    z-index: 1;
 }
-
-.leaflet-container {
-    background: #111 !important;
-}
-
 
 /* --- Window System --- */
 .window {
     position: absolute;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     border-radius: var(--card-radius);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: var(--shadow-main);
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
-    min-width: 250px;
-    transition: box-shadow 0.2s, border-color 0.2s, transform 0.1s;
+    transition: transform 0.2s var(--ease-out), box-shadow 0.2s;
     overflow: hidden;
+    min-width: 300px;
 }
 
 .window.active {
-    z-index: 1000;
-    border-color: rgba(0, 242, 255, 0.3);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 242, 255, 0.1);
+    z-index: 100;
+    border-color: rgba(14, 165, 233, 0.3);
+    box-shadow:
+        0 20px 25px -5px rgba(0, 0, 0, 0.5),
+        0 8px 10px -6px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(14, 165, 233, 0.1);
 }
 
 .window-header {
-    height: 36px;
-    background: rgba(255, 255, 255, 0.03);
-    border-bottom: 1px solid var(--glass-border);
+    height: 48px;
+    padding: 0 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 12px;
+    border-bottom: 1px solid var(--glass-border);
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent);
     cursor: grab;
     user-select: none;
 }
 
 .window-header:active {
     cursor: grabbing;
-    background: rgba(255, 255, 255, 0.06);
 }
 
 .window-title {
+    font-family: var(--font-data);
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 0.1em;
     color: var(--primary);
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
+.window-title::before {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 6px;
+    background: var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--primary-glow);
+}
+
 .window-controls {
     display: flex;
-    gap: 6px;
+    gap: 8px;
 }
 
 .win-btn {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     border: none;
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.2);
-    transition: background 0.2s;
+    background: rgba(255, 255, 255, 0.15);
+    transition: transform 0.1s, opacity 0.2s;
 }
 
-.win-btn.close { background: #ff5f56; }
-.win-btn.minimize { background: #ffbd2e; }
-.win-btn.maximize { background: #27c93f; }
+.win-btn:hover {
+    transform: scale(1.1);
+    opacity: 1;
+}
 
-.win-btn:hover { filter: brightness(1.2); }
+.win-btn.close {
+    background: #ef4444;
+}
+
+.win-btn.minimize {
+    background: #f59e0b;
+}
 
 .window-content {
-    padding: 16px;
-    overflow-y: auto;
-    max-height: 80vh;
+    padding: 20px;
     color: var(--text-main);
 }
 
 .window.minimized .window-content {
     display: none;
 }
+
 .window.minimized {
     height: auto !important;
     min-height: 0 !important;
-    resize: none !important;
 }
 
 /* --- Components --- */
 
-/* Simulation Controls (Top Bar) */
+/* Simulation Controls (Floating Pill) */
 #sim-controls {
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: auto;
-    border-radius: 30px;
-    padding: 0 20px;
-    height: 50px;
-    flex-direction: row;
-    align-items: center;
-    gap: 16px;
-    z-index: 2000; /* Always on top */
-}
-
-#sim-controls .window-header { display: none; } /* No drag handle for main bar, or maybe custom? */
-/* Actually let's make it draggable too via a wrapper or just static for now? 
-   User asked for "move or minimize windows", let's keep it consistent. */
-
-.control-group {
+    top: 24px;
+    border-radius: 100px;
+    /* Pill shape */
+    height: 64px;
+    background: rgba(13, 17, 23, 0.8);
     display: flex;
     align-items: center;
-    gap: 8px;
+    padding: 0 12px;
+    gap: 16px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--glass-border);
+}
+
+/* Divider for controls */
+.control-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--glass-border);
+}
+
+.time-display {
+    font-family: var(--font-data);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-main);
+    min-width: 80px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    margin: 0 8px;
 }
 
 .icon-btn {
     background: transparent;
-    border: 1px solid var(--glass-border);
+    border: 1px solid transparent;
     color: var(--text-muted);
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -193,91 +233,186 @@ body {
 }
 
 .icon-btn:hover {
-    background: rgba(255,255,255,0.1);
-    color: white;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
 }
 
 .icon-btn.active {
-    background: var(--primary-dim);
-    border-color: var(--primary);
     color: var(--primary);
-    box-shadow: 0 0 10px var(--primary-dim);
+    background: rgba(14, 165, 233, 0.1);
+    border-color: rgba(14, 165, 233, 0.2);
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.1);
 }
 
-.time-display {
-    font-family: var(--font-mono);
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--primary);
-    min-width: 80px;
-    text-align: center;
+.speed-btn {
+    font-family: var(--font-data);
+    font-size: 12px;
+    width: auto;
+    padding: 0 12px;
+    border-radius: 6px;
+    height: 32px;
 }
 
-/* Stats */
+/* Stats Panels */
 .stat-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 8px;
-    font-size: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
-    padding-bottom: 4px;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    padding-bottom: 8px;
 }
-.stat-row:last-child { border-bottom: none; }
 
-.stat-label { color: var(--text-muted); }
-.stat-value { font-weight: 600; font-family: var(--font-mono); }
+.stat-label {
+    color: var(--text-muted);
+    font-weight: 500;
+}
 
-/* Buttons */
-.btn {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--glass-border);
+.stat-value {
+    font-family: var(--font-data);
+    font-weight: 700;
     color: var(--text-main);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 11px;
-    cursor: pointer;
-    text-transform: uppercase;
-    font-weight: 600;
+}
+
+/* Action Buttons */
+.btn {
     width: 100%;
-    margin-top: 4px;
-    transition: all 0.2s;
+    padding: 10px 16px;
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .btn:hover {
-    background: rgba(255,255,255,0.1);
-    border-color: rgba(255,255,255,0.3);
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-1px);
 }
+
+/* Primary Action */
 .btn.primary {
-    background: rgba(0, 242, 255, 0.1);
-    border-color: rgba(0, 242, 255, 0.3);
+    background: rgba(14, 165, 233, 0.1);
+    border-color: rgba(14, 165, 233, 0.3);
     color: var(--primary);
 }
+
 .btn.primary:hover {
-    box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
-    background: rgba(0, 242, 255, 0.2);
+    background: rgba(14, 165, 233, 0.2);
+    box-shadow: 0 0 15px var(--primary-glow);
 }
+
+/* Danger Action */
 .btn.danger {
-    background: rgba(255, 0, 85, 0.1);
-    border-color: rgba(255, 0, 85, 0.3);
-    color: var(--danger);
+    background: rgba(244, 63, 94, 0.1);
+    border-color: rgba(244, 63, 94, 0.3);
+    color: var(--accent);
 }
+
 .btn.danger:hover {
-    box-shadow: 0 0 15px rgba(255, 0, 85, 0.2);
-    background: rgba(255, 0, 85, 0.2);
+    background: rgba(244, 63, 94, 0.2);
+    box-shadow: 0 0 15px var(--accent-glow);
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
-
-/* Animation Utils */
-@keyframes pulse-red {
-    0% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(255, 0, 85, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); }
+/* Grouped buttons */
+.btn-group {
+    display: flex;
+    gap: 8px;
 }
 
-.pulse-danger {
-    animation: pulse-red 2s infinite;
+.btn-group .btn {
+    margin-top: 0;
+}
+
+/* User Profile Card specific */
+.user-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.user-avatar {
+    width: 48px;
+    height: 48px;
+    background: rgba(14, 165, 233, 0.2);
+    border-radius: 50%;
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    font-size: 20px;
+    border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+/* Quote Result Pulse */
+.quote-box {
+    animation: fadeIn 0.3s ease-out;
+    background: rgba(16, 185, 129, 0.05);
+    /* subtle green tint */
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+    text-align: center;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Leaflet Overrides for Dark Mode integration */
+.leaflet-container {
+    background: #050505 !important;
+    font-family: var(--font-ui) !important;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+    background: rgba(13, 17, 23, 0.9) !important;
+    backdrop-filter: blur(8px) !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--glass-border);
+}
+
+.leaflet-popup-tip {
+    border-bottom: 0;
+    border-right: 0;
 }

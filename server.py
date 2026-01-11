@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Body
+# Trigger Reload
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from typing import Optional
@@ -15,7 +16,8 @@ from simulation_controller import SimulationController
 from schemas import MetricType, TwinObservation
 
 # --- Initialize System ---
-mgr = manager.get_manager("full_city_config.json")
+# --- Initialize System ---
+mgr = manager.get_manager("demo_config.json")
 gen = generator.TrafficGenerator()
 
 # Attach agent aggressiveness to manager for state sharing
@@ -120,6 +122,7 @@ def get_live_state():
             "status": "CONGESTED" if eff_ci > 0.8 else "FLOWING",
             "type": getattr(link, "type", "road"),
             "diversion": int(getattr(link, "last_diversion", 0)),
+            "is_live": l_id in mgr.policy.p_config.get('live_mode_links', []),
             "coordinates": link.coordinates 
         })
     
