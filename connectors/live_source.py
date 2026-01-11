@@ -66,7 +66,8 @@ class LiveAPISource:
 
     def _fetch_external_payload(self) -> Optional[dict]:
         try:
-            with urlopen(self.api_url, timeout=5) as response:
+            api_url = self._normalize_api_url(self.api_url)
+            with urlopen(api_url, timeout=5) as response:
                 return json.loads(response.read().decode("utf-8"))
         except Exception as exc:
             logger.warning("Live source API poll failed: %s", exc)
