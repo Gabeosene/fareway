@@ -21,9 +21,13 @@ class TwinAdapter:
     def ingest(self, obs: TwinObservation):
         # 1. Routing Strategy: Hybrid Mode
         # If a link is set to "Live Mode", ignore Synthetic (sim) inputs
+        is_sim = obs.source.startswith("sim")
+        is_live = obs.source.startswith("live") or obs.source.startswith("api")
         if obs.link_id in self.live_mode_links:
-            if obs.source.startswith("sim"):
+            if is_sim:
                 return # Block synthetic data for live links
+        elif is_live:
+            return # Block live data for simulated links
         
         # 2. Validation
         if obs.link_id not in self.mgr.twin.links:
