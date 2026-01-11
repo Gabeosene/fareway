@@ -1,5 +1,7 @@
 import time
-import msvcrt
+import os
+import sys
+import select
 import random
 import datetime
 from collections import deque
@@ -14,6 +16,11 @@ from rich import box
 
 import manager
 import generator
+
+if os.name == "nt":
+    import msvcrt
+else:
+    msvcrt = None
 
 # --- Configuration ---
 REFRESH_RATE = 10 # Hz
@@ -197,13 +204,19 @@ def main():
         try:
             while True:
                 # 1. Input
-                if msvcrt.kbhit():
-                    key = msvcrt.getch().lower()
-                    if key == b'q':
-                        break
-                    elif key == b'a':
-                        gen.trigger_accident("link_szechenyi")
-                        log_messages.append("[bold red] ALERT: ACCIDENT REPORTED ON CHAIN BRIDGE![/bold red]")
+                key = None
+                if msvcrt and msvcrt.kbhit():
+                    key = msvcrt.getch().decode(errors="ignore").lower()
+                else:
+                    ready, _, _ = select.select([sys.stdin], [], [], 0)
+                    if ready:
+                        key = sys.stdin.read(1).lower()
+
+                if key == "q":
+                    break
+                elif key == "a":
+                    gen.trigger_accident("link_szechenyi")
+                    log_messages.append("[bold red] ALERT: ACCIDENT REPORTED ON CHAIN BRIDGE![/bold red]")
 
                 # 2. Physics & Logic
                 calculate_flow_logic() # <-- New smarter logic
