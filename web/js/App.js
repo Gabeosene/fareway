@@ -9,6 +9,9 @@ class App {
         this.chart = null;
         this.isChartRequestInFlight = false;
         this.liveStaleThresholdSec = 10;
+        this.adminLinks = [];
+        this.liveLinkIds = new Set();
+        this.adminSelectionDirty = false;
 
         this.state = {
             paused: false,
@@ -20,6 +23,7 @@ class App {
         this.initMap();
         this.initChart();
         this.initListeners();
+        this.initAdminLinks();
         this.setViewMode(this.state.viewMode);
 
         // Start Loops
@@ -117,6 +121,16 @@ class App {
         if (liveAllBtn) {
             liveAllBtn.onclick = () => this.enableAllLiveLinks();
         }
+
+        const refreshAdminLinksBtn = document.getElementById('btn-admin-refresh-links');
+        if (refreshAdminLinksBtn) {
+            refreshAdminLinksBtn.onclick = () => this.initAdminLinks();
+        }
+
+        const applyAdminLinksBtn = document.getElementById('btn-admin-apply-links');
+        if (applyAdminLinksBtn) {
+            applyAdminLinksBtn.onclick = () => this.applyAdminLiveLinks();
+        }
     }
 
     async generateQuote() {
@@ -175,9 +189,120 @@ class App {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mode: 'all' })
             });
+            this.adminSelectionDirty = false;
+            await this.fetchLiveLinks();
+            this.renderAdminLinks();
             this.pollState();
         } catch (e) {
             console.error("Enable live links failed", e);
+        }
+    }
+
+    async initAdminLinks() {
+        await Promise.all([this.fetchAdminLinks(), this.fetchLiveLinks()]);
+        this.adminSelectionDirty = false;
+        this.renderAdminLinks();
+    }
+
+    async fetchAdminLinks() {
+        const listEl = document.getElementById('admin-live-list');
+        try {
+            const resp = await fetch(`${this.apiBase}/admin/links`);
+            const data = await resp.json();
+            this.adminLinks = (data.links || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+        } catch (e) {
+            console.error("Admin links fetch failed", e);
+            if (listEl && !this.adminLinks.length) {
+                listEl.innerHTML = '<div style="color: var(--text-dim); font-size: 12px;">Unable to load links.</div>';
+            }
+        }
+    }
+
+    async fetchLiveLinks() {
+        try {
+            const resp = await fetch(`${this.apiBase}/admin/live-links`);
+            const data = await resp.json();
+            this.liveLinkIds = new Set(data.live_mode_links || []);
+        } catch (e) {
+            console.error("Live links fetch failed", e);
+        }
+    }
+
+    renderAdminLinks() {
+        const listEl = document.getElementById('admin-live-list');
+        if (!listEl) return;
+
+        listEl.innerHTML = '';
+
+        if (!this.adminLinks.length) {
+            const empty = document.createElement('div');
+            empty.style.color = 'var(--text-dim)';
+            empty.style.fontSize = '12px';
+            empty.textContent = 'No links available.';
+            listEl.appendChild(empty);
+            this.updateAdminSummary();
+            return;
+        }
+
+        this.adminLinks.forEach(link => {
+            const item = document.createElement('label');
+            item.className = 'live-feed-item fresh';
+            item.style.cursor = 'pointer';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = this.liveLinkIds.has(link.id);
+            checkbox.dataset.linkId = link.id;
+            checkbox.style.marginRight = '8px';
+            checkbox.onchange = () => {
+                this.adminSelectionDirty = true;
+                if (checkbox.checked) {
+                    this.liveLinkIds.add(link.id);
+                } else {
+                    this.liveLinkIds.delete(link.id);
+                }
+                this.updateAdminSummary();
+            };
+
+            const name = document.createElement('div');
+            name.className = 'live-feed-name';
+            name.textContent = link.name;
+
+            const meta = document.createElement('div');
+            meta.className = 'live-feed-meta';
+            meta.textContent = link.type ? link.type.toUpperCase() : 'LINK';
+
+            item.appendChild(checkbox);
+            item.appendChild(name);
+            item.appendChild(meta);
+            listEl.appendChild(item);
+        });
+
+        this.updateAdminSummary();
+    }
+
+    updateAdminSummary() {
+        const summaryEl = document.getElementById('admin-live-summary');
+        if (!summaryEl) return;
+        const total = this.adminLinks.length;
+        const liveCount = this.liveLinkIds.size;
+        summaryEl.innerText = `${liveCount} live link${liveCount === 1 ? '' : 's'} selected${total ? ` • ${total} total` : ''}`;
+    }
+
+    async applyAdminLiveLinks() {
+        try {
+            const resp = await fetch(`${this.apiBase}/admin/live-links`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ link_ids: Array.from(this.liveLinkIds) })
+            });
+            const data = await resp.json();
+            this.liveLinkIds = new Set(data.live_mode_links || []);
+            this.adminSelectionDirty = false;
+            this.renderAdminLinks();
+            this.pollState();
+        } catch (e) {
+            console.error("Apply live links failed", e);
         }
     }
 
@@ -389,6 +514,7 @@ class App {
 
         // Live Feed
         this.updateLiveFeed(data.links);
+        this.syncAdminSelectionFromLive(data.links);
     }
 
     updateLiveFeed(links) {
@@ -431,6 +557,32 @@ class App {
         });
 
         summaryEl.innerText = `${liveLinks.length} live link${liveLinks.length === 1 ? '' : 's'} • ${staleCount} stale`;
+    }
+
+    syncAdminSelectionFromLive(links) {
+        if (this.adminSelectionDirty) return;
+        const liveIds = new Set(links.filter(link => link.is_live).map(link => link.id));
+        let changed = false;
+        if (liveIds.size !== this.liveLinkIds.size) {
+            changed = true;
+        } else {
+            for (const id of liveIds) {
+                if (!this.liveLinkIds.has(id)) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        if (!changed) return;
+        this.liveLinkIds = liveIds;
+        const listEl = document.getElementById('admin-live-list');
+        if (listEl) {
+            listEl.querySelectorAll('input[type="checkbox"][data-link-id]').forEach(input => {
+                input.checked = this.liveLinkIds.has(input.dataset.linkId);
+            });
+        }
+        this.updateAdminSummary();
     }
 
     formatAge(ageSec) {
