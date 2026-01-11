@@ -4,6 +4,7 @@ import threading
 import time
 from itertools import cycle
 from typing import Iterable, Optional
+from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
 
 from schemas import MetricType, TwinObservation
@@ -26,7 +27,7 @@ class LiveAPISource:
         self.adapter = adapter
         self.link_ids = list(link_ids)
         self.poll_interval = poll_interval
-        self.api_url = api_url
+        self.api_url = self._normalize_api_url(api_url)
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._link_cycle = cycle(self.link_ids) if self.link_ids else None
@@ -55,6 +56,13 @@ class LiveAPISource:
             return
         if not self._thread or not self._thread.is_alive():
             self.start()
+
+    def _normalize_api_url(self, api_url: str) -> str:
+        parsed = urlparse(api_url)
+        if parsed.path.endswith("/Etc/UT"):
+            corrected_path = f"{parsed.path}C"
+            return urlunparse(parsed._replace(path=corrected_path))
+        return api_url
 
     def _fetch_external_payload(self) -> Optional[dict]:
         try:
