@@ -13,12 +13,14 @@ class App {
         this.state = {
             paused: false,
             speed: 1.0,
-            simTime: "00:00"
+            simTime: "00:00",
+            viewMode: "live"
         };
 
         this.initMap();
         this.initChart();
         this.initListeners();
+        this.setViewMode(this.state.viewMode);
 
         // Start Loops
         this.pollInterval = setInterval(() => this.pollState(), 500);
@@ -83,6 +85,14 @@ class App {
     }
 
     initListeners() {
+        // View Toggle
+        const liveBtn = document.getElementById('btn-view-live');
+        const simBtn = document.getElementById('btn-view-sim');
+        if (liveBtn && simBtn) {
+            liveBtn.onclick = () => this.setViewMode('live');
+            simBtn.onclick = () => this.setViewMode('simulator');
+        }
+
         // Time Controls
         document.getElementById('btn-play').onclick = () => this.sendControl('PLAY');
         document.getElementById('btn-pause').onclick = () => this.sendControl('PAUSE');
@@ -171,6 +181,17 @@ class App {
         }
     }
 
+    setViewMode(mode) {
+        this.state.viewMode = mode;
+        const isSim = mode === 'simulator';
+        document.body.classList.toggle('sim-view', isSim);
+
+        const liveBtn = document.getElementById('btn-view-live');
+        const simBtn = document.getElementById('btn-view-sim');
+        if (liveBtn) liveBtn.classList.toggle('active', !isSim);
+        if (simBtn) simBtn.classList.toggle('active', isSim);
+    }
+
     updateControlUI(data) {
         this.state.paused = data.paused;
         this.state.speed = data.speed;
@@ -200,7 +221,8 @@ class App {
             const data = await response.json();
 
             // Global Updates
-            document.getElementById('sim-time').innerText = data.sim_time;
+            const simTimeEl = document.getElementById('sim-time');
+            if (simTimeEl) simTimeEl.innerText = data.sim_time;
 
             // Sync Controls if externall changed
             if (data.control) this.updateControlUI(data.control);
