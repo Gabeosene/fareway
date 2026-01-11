@@ -6,6 +6,7 @@ class App {
         this.wm = new WindowManager();
         this.map = null;
         this.polylines = {};
+        this.liveMarkers = {};
         this.chart = null;
         this.isChartRequestInFlight = false;
         this.liveStaleThresholdSec = 10;
@@ -473,11 +474,61 @@ class App {
             }
         });
 
+        this.updateLiveMarkers(links);
+
         Object.entries(this.polylines).forEach(([linkId, polyGroup]) => {
             if (currentLinkIds.has(linkId)) return;
             this.map.removeLayer(polyGroup.core);
             this.map.removeLayer(polyGroup.glow);
             delete this.polylines[linkId];
+        });
+    }
+
+    updateLiveMarkers(links) {
+        const liveLinkIds = new Set();
+        links.forEach(link => {
+            if (!link.is_live || !Array.isArray(link.coordinates) || link.coordinates.length === 0) return;
+            const coordIndex = Math.floor(link.coordinates.length / 2);
+            const latLng = link.coordinates[coordIndex];
+            if (!Array.isArray(latLng) || latLng.length < 2) return;
+
+            liveLinkIds.add(link.id);
+            const ageSec = link.age_sec;
+            const isStale = typeof ageSec === 'number' ? ageSec > this.liveStaleThresholdSec : true;
+            const markerClass = isStale ? 'live-marker live-marker-stale' : 'live-marker live-marker-fresh';
+            const color = isStale ? '#64748b' : '#22c55e';
+
+            let marker = this.liveMarkers[link.id];
+            if (!marker) {
+                marker = L.circleMarker(latLng, {
+                    radius: 5,
+                    color: color,
+                    weight: 2,
+                    fillColor: color,
+                    fillOpacity: 0.9,
+                    className: markerClass
+                }).addTo(this.map);
+                marker.bindTooltip(`${link.name} • ${isStale ? 'stale' : 'live'}`, {
+                    direction: 'top',
+                    offset: [0, -6],
+                    opacity: 0.8
+                });
+                this.liveMarkers[link.id] = marker;
+            } else {
+                marker.setLatLng(latLng);
+                marker.setStyle({
+                    color: color,
+                    fillColor: color,
+                    className: markerClass
+                });
+                marker.setTooltipContent(`${link.name} • ${isStale ? 'stale' : 'live'}`);
+            }
+        });
+
+        Object.entries(this.liveMarkers).forEach(([linkId, marker]) => {
+            if (liveLinkIds.has(linkId)) return;
+            this.map.removeLayer(marker);
+            delete this.liveMarkers[linkId];
         });
     }
 
