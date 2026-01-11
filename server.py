@@ -12,6 +12,7 @@ from collections import deque
 import manager
 import generator
 from simulation_controller import SimulationController
+from schemas import MetricType, TwinObservation
 
 # --- Initialize System ---
 mgr = manager.get_manager("full_city_config.json")
@@ -218,6 +219,32 @@ def confirm_reservation(reservation_id: str = Body(..., embed=True)):
         return receipt
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/ingest/speed")
+def ingest_speed(link_id: str = Body(..., embed=True), speed: float = Body(..., embed=True)):
+    """
+    Manual/Scripted ingest for Live Traffic Data (Speed).
+    Physics translation happens in the Adapter.
+    """
+    obs = TwinObservation(
+        source="api-push",
+        link_id=link_id,
+        timestamp=time.time(),
+        metric=MetricType.SPEED_KMH,
+        value=speed
+    )
+    mgr.adapter.ingest(obs)
+    
+    # Return the calculated flow for debugging visibility
+    link = mgr.twin.links.get(link_id)
+    current_flow = link.current_flow if link else -1
+    
+    return {
+        "status": "accepted",
+        "link": link_id,
+        "input_speed": speed,
+        "translated_flow": current_flow
+    }
 
 
 # --- Static Files (Frontend) ---

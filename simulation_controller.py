@@ -2,6 +2,7 @@ import time
 import threading
 import logging
 from typing import Optional
+from schemas import TwinObservation, MetricType
 
 logger = logging.getLogger("sim_controller")
 
@@ -118,14 +119,35 @@ class SimulationController:
             if "Bridge" in link.name or "Ring" in link.name:
                 total_shifting_demand += shifted_flow
             
-            self.mgr.twin.ingest_observation(link_id, link.current_flow)
+            # self.mgr.twin.ingest_observation(link_id, link.current_flow)
+            
+            # [REFACTORED] Send to Adapter
+            obs = TwinObservation(
+                source="sim-gen",
+                link_id=link_id,
+                timestamp=now,
+                metric=MetricType.FLOW_VEH_PER_HOUR,
+                value=link.current_flow
+            )
+            self.mgr.adapter.ingest(obs)
             
         # 2. Metro Absorption
         metro = self.mgr.twin.links.get("link_m4")
         if metro:
             metro.current_flow += total_shifting_demand
             metro.last_diversion = -total_shifting_demand
-            self.mgr.twin.ingest_observation("link_m4", metro.current_flow)
+            
+            # self.mgr.twin.ingest_observation("link_m4", metro.current_flow)
+            
+            # [REFACTORED] Send to Adapter
+            obs = TwinObservation(
+                source="sim-gen",
+                link_id="link_m4",
+                timestamp=now,
+                metric=MetricType.FLOW_VEH_PER_HOUR,
+                value=metro.current_flow
+            )
+            self.mgr.adapter.ingest(obs)
             
         # 3. Market Tick
         self.mgr.twin.tick()

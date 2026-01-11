@@ -3,6 +3,7 @@ import time
 import uuid
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
+from adapter import TwinAdapter
 
 # --- Data Models ---
 
@@ -274,6 +275,7 @@ def get_manager(config_path: str = "demo_config.json"):
         mgr.twin = twin
         mgr.policy = policy
         mgr.service = service
+        mgr.adapter = TwinAdapter(mgr)
         _singleton_manager = mgr
         
     return _singleton_manager

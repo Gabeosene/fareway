@@ -71,7 +71,8 @@
         "price_sensitivity_factor": 5.0,
         "reward_threshold_ci": 0.4,
         "reward_amount_credits": 100,
-        "currency_symbol": "HUF"
+        "currency_symbol": "HUF",
+        "live_mode_links": []
     },
     "simulation": {
         "tick_duration_sec": 1,
