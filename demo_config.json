@@ -741,6 +741,7 @@
         "reward_threshold_ci": 0.4,
         "reward_amount_credits": 100,
         "currency_symbol": "HUF",
+        "live_stale_threshold_sec": 90,
         "live_mode_links": [
             "link_szechenyi",
             "link_erzsebet",

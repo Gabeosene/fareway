@@ -150,7 +150,8 @@ def get_live_state():
         "links": network_state,
         "policy": {
             "sensitivity": mgr.policy.p_config.get('price_sensitivity_factor', 5.0),
-            "aggressiveness": mgr.agent_aggressiveness
+            "aggressiveness": mgr.agent_aggressiveness,
+            "live_stale_threshold_sec": mgr.policy.p_config.get('live_stale_threshold_sec', 10)
         },
         "control": {
             "paused": sim_controller.paused,
