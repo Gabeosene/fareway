@@ -257,7 +257,7 @@ class QuoteService:
 # Factory to boostrap
 _singleton_manager = None
 
-def get_manager(config_path: str = "demo_config.json"):
+def get_manager(config_path: str = "full_city_config.json"):
     global _singleton_manager
     if _singleton_manager is None:
         with open(config_path, 'r', encoding='utf-8') as f:

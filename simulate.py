@@ -28,7 +28,7 @@ LOG_SIZE = 8
 
 # --- State ---
 console = Console()
-mgr = manager.get_manager("demo_config.json")
+mgr = manager.get_manager("full_city_config.json")
 gen = generator.TrafficGenerator()
 log_messages = deque(maxlen=LOG_SIZE)
 

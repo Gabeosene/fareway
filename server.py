@@ -17,7 +17,7 @@ from schemas import MetricType, TwinObservation
 
 # --- Initialize System ---
 # --- Initialize System ---
-mgr = manager.get_manager("demo_config.json")
+mgr = manager.get_manager("full_city_config.json")
 gen = generator.TrafficGenerator()
 
 # Attach agent aggressiveness to manager for state sharing
@@ -262,4 +262,3 @@ else:
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
-
