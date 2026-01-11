@@ -59,8 +59,10 @@ class LiveAPISource:
 
     def _normalize_api_url(self, api_url: str) -> str:
         parsed = urlparse(api_url)
-        path = parsed.path.replace("/Etc/UT", "/Etc/UTC")
-        return urlunparse(parsed._replace(path=path))
+        if parsed.path.endswith("/Etc/UT"):
+            corrected_path = f"{parsed.path}C"
+            return urlunparse(parsed._replace(path=corrected_path))
+        return api_url
 
     def _fetch_external_payload(self) -> Optional[dict]:
         try:
