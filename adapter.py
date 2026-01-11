@@ -47,7 +47,12 @@ class TwinAdapter:
         # 4. Update Twin
         # We apply the update immediately. 
         # Future: Add smoothing/EMA here if live data is jittery.
-        self.mgr.twin.ingest_observation(obs.link_id, final_flow)
+        self.mgr.twin.ingest_observation(
+            obs.link_id,
+            final_flow,
+            source=obs.source,
+            timestamp=obs.timestamp
+        )
 
     def _speed_to_flow(self, speed_kmh: float, link) -> int:
         """
