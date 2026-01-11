@@ -7,6 +7,7 @@ class App {
         this.map = null;
         this.polylines = {};
         this.chart = null;
+        this.isChartRequestInFlight = false;
 
         this.state = {
             paused: false,
@@ -20,6 +21,7 @@ class App {
 
         // Start Loops
         this.pollInterval = setInterval(() => this.pollState(), 500);
+        this.chartPollInterval = setInterval(() => this.updateCharts(), 10000);
     }
 
     initMap() {
@@ -187,9 +189,6 @@ class App {
             // Links
             this.updateMap(data.links);
 
-            // Charts
-            this.updateCharts();
-
             // Stats Panels
             this.updateStats(data);
 
@@ -278,6 +277,8 @@ class App {
     }
 
     async updateCharts() {
+        if (this.isChartRequestInFlight) return;
+        this.isChartRequestInFlight = true;
         try {
             const resp = await fetch(`${this.apiBase}/stats/history`);
             const history = await resp.json();
@@ -286,7 +287,11 @@ class App {
             this.chart.data.datasets[0].data = history.map(h => h.avg_ci);
             this.chart.data.datasets[1].data = history.map(h => h.sensitivity);
             this.chart.update();
-        } catch (e) { }
+        } catch (e) { 
+            console.error("Chart update failed", e);
+        } finally {
+            this.isChartRequestInFlight = false;
+        }
     }
 
     updateStats(data) {
