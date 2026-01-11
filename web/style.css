@@ -169,6 +169,7 @@ body {
 .window-content {
     padding: 20px;
     color: var(--text-main);
+    overflow-y: auto;
 }
 
 .window.minimized .window-content {
@@ -195,6 +196,38 @@ body {
     gap: 16px;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
     border: 1px solid var(--glass-border);
+}
+
+.view-btn {
+    font-family: var(--font-data);
+    font-size: 12px;
+    width: auto;
+    padding: 0 14px;
+    border-radius: 999px;
+    height: 32px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.live-label {
+    font-family: var(--font-data);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 6px 12px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+body:not(.sim-view) .sim-only {
+    display: none;
+}
+
+body.sim-view .live-only {
+    display: none;
 }
 
 /* Divider for controls */
@@ -384,6 +417,10 @@ body {
 
 .btn-group .btn {
     margin-top: 0;
+}
+
+#hud-panel .window-content {
+    max-height: calc(100vh - 200px);
 }
 
 /* User Profile Card specific */
