@@ -199,6 +199,8 @@ class App {
     }
 
     updateMap(links) {
+        const currentLinkIds = new Set(links.map(link => link.id));
+
         links.forEach(link => {
             let polyGroup = this.polylines[link.id];
 
@@ -274,6 +276,13 @@ class App {
             } else {
                 polyGroup.core.setPopupContent(content);
             }
+        });
+
+        Object.entries(this.polylines).forEach(([linkId, polyGroup]) => {
+            if (currentLinkIds.has(linkId)) return;
+            this.map.removeLayer(polyGroup.core);
+            this.map.removeLayer(polyGroup.glow);
+            delete this.polylines[linkId];
         });
     }
 
