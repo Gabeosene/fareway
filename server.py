@@ -14,6 +14,7 @@ from collections import deque
 import manager
 import generator
 from simulation_controller import SimulationController
+from connectors.live_source import LiveAPISource
 from schemas import MetricType, TwinObservation
 
 # --- Initialize System ---
@@ -27,6 +28,10 @@ mgr.agent_aggressiveness = 1.0
 # Initialize Controller
 sim_controller = SimulationController(mgr, gen)
 sim_controller.start()
+
+# Initialize Live Connector
+live_source = LiveAPISource(mgr.adapter, list(mgr.twin.links.keys()))
+live_source.start()
 
 # Analytics State
 history = deque(maxlen=60)
