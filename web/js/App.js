@@ -503,6 +503,9 @@ class App {
         // Update Policy Panel
         const pol = data.policy;
         document.getElementById('sens-display').innerText = pol.sensitivity.toFixed(1);
+        if (typeof pol.live_stale_threshold_sec === 'number') {
+            this.liveStaleThresholdSec = pol.live_stale_threshold_sec;
+        }
 
         let aggr = "NORMAL";
         if (pol.aggressiveness > 1.5) aggr = "HIGH";
@@ -556,7 +559,7 @@ class App {
             listEl.appendChild(item);
         });
 
-        summaryEl.innerText = `${liveLinks.length} live link${liveLinks.length === 1 ? '' : 's'} • ${staleCount} stale`;
+        summaryEl.innerText = `${liveLinks.length} live link${liveLinks.length === 1 ? '' : 's'} • ${staleCount} stale (> ${this.liveStaleThresholdSec}s)`;
     }
 
     syncAdminSelectionFromLive(links) {
