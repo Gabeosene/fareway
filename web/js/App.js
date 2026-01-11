@@ -258,16 +258,40 @@ class App {
             });
 
             // Popup / Tooltip
-            const liveBadge = link.is_live ? '<span style="color:#00ff00; font-weight:bold;">[LIVE FEED]</span>' : '<span style="color:#888;">[SIMULATED]</span>';
-            const content = `
-                <div style="font-family: 'Courier New'; font-size: 12px;">
-                    <strong>${link.name}</strong><br/>
-                    ${liveBadge}<br/>
-                    Flow: ${link.flow} / ${link.capacity}<br/>
-                    CI: ${link.ci.toFixed(2)}<br/>
-                    Price: <b>${link.price} HUF</b>
-                </div>
-            `;
+            const content = document.createElement('div');
+            content.style.fontFamily = "'Courier New'";
+            content.style.fontSize = '12px';
+
+            const nameEl = document.createElement('strong');
+            nameEl.textContent = link.name;
+            content.appendChild(nameEl);
+            content.appendChild(document.createElement('br'));
+
+            const badge = document.createElement('span');
+            badge.textContent = link.is_live ? '[LIVE FEED]' : '[SIMULATED]';
+            badge.style.color = link.is_live ? '#00ff00' : '#888';
+            if (link.is_live) {
+                badge.style.fontWeight = 'bold';
+            }
+            content.appendChild(badge);
+            content.appendChild(document.createElement('br'));
+
+            const flowLine = document.createElement('div');
+            flowLine.append('Flow: ', String(link.flow), ' / ', String(link.capacity));
+            content.appendChild(flowLine);
+
+            const ciLine = document.createElement('div');
+            const ciValue = Number.isFinite(link.ci) ? link.ci.toFixed(2) : String(link.ci);
+            ciLine.append('CI: ', ciValue);
+            content.appendChild(ciLine);
+
+            const priceLine = document.createElement('div');
+            const priceLabel = document.createElement('span');
+            priceLabel.textContent = 'Price: ';
+            const priceValue = document.createElement('b');
+            priceValue.textContent = String(link.price);
+            priceLine.append(priceLabel, priceValue, ' HUF');
+            content.appendChild(priceLine);
 
             if (!polyGroup.core.getPopup()) {
                 polyGroup.core.bindPopup(content, { closeButton: false, autoPan: false });
