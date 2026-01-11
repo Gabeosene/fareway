@@ -20,6 +20,8 @@ class NetworkLink:
     price_multiplier: float = 1.0
     type: str = "road"
     coordinates: List[List[float]] = field(default_factory=list)
+    last_observation_ts: float = 0.0
+    last_observation_source: str = "sim"
 
 @dataclass
 class UserProfile:
@@ -121,9 +123,18 @@ class CongestionTwin:
             link.price_multiplier = multiplier
             link.current_price = int(link.base_price * multiplier)
             
-    def ingest_observation(self, link_id: str, flow: int):
+    def ingest_observation(
+        self,
+        link_id: str,
+        flow: int,
+        source: str = "sim",
+        timestamp: Optional[float] = None
+    ):
         if link_id in self.links:
-            self.links[link_id].current_flow = flow
+            link = self.links[link_id]
+            link.current_flow = flow
+            link.last_observation_source = source
+            link.last_observation_ts = timestamp if timestamp is not None else time.time()
 
     def record_telemetry(self, event_type: str, details: Dict):
         self.history.append({

@@ -275,6 +275,60 @@ body {
     color: var(--text-main);
 }
 
+/* Live Feed */
+.live-feed-summary {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.live-feed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.live-feed-item {
+    display: grid;
+    grid-template-columns: 10px 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.live-feed-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    box-shadow: 0 0 10px rgba(148, 163, 184, 0.4);
+}
+
+.live-feed-item.fresh .live-feed-dot {
+    background: var(--success);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+}
+
+.live-feed-item.stale .live-feed-dot {
+    background: var(--warning);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+}
+
+.live-feed-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.live-feed-meta {
+    grid-column: 2;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
 /* Action Buttons */
 .btn {
     width: 100%;

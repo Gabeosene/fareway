@@ -102,6 +102,7 @@ def control_sim(action: str = Body(..., embed=True), speed: Optional[float] = Bo
 def get_live_state():
     """Returns the full state of the Digital Twin."""
     network_state = []
+    now = time.time()
     
     cap_mod = 1.0
     if gen.weather == "RAIN": cap_mod = 0.9
@@ -111,6 +112,12 @@ def get_live_state():
         eff_cap = int(link.capacity * cap_mod)
         eff_ci = link.current_flow / eff_cap if eff_cap > 0 else 1.0
         
+        age_sec = None
+        if link.last_observation_ts:
+            age_sec = max(0.0, now - link.last_observation_ts)
+
+        last_source = link.last_observation_source if link.last_observation_ts else None
+
         network_state.append({
             "id": l_id,
             "name": link.name,
@@ -123,11 +130,14 @@ def get_live_state():
             "type": getattr(link, "type", "road"),
             "diversion": int(getattr(link, "last_diversion", 0)),
             "is_live": l_id in mgr.policy.p_config.get('live_mode_links', []),
+            "last_observation_at": link.last_observation_ts,
+            "last_observation_source": last_source,
+            "age_sec": age_sec,
             "coordinates": link.coordinates 
         })
     
     return {
-        "timestamp": time.time(),
+        "timestamp": now,
         "sim_time": gen.get_virtual_time(), # This might need to be decoupled if we want time travel
         "weather": gen.weather,
         "events": list(gen.active_events.keys()),

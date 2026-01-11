@@ -8,6 +8,7 @@ class App {
         this.polylines = {};
         this.chart = null;
         this.isChartRequestInFlight = false;
+        this.liveStaleThresholdSec = 10;
 
         this.state = {
             paused: false,
@@ -294,6 +295,12 @@ class App {
             priceLine.append(priceLabel, priceValue, ' HUF');
             content.appendChild(priceLine);
 
+            const updateLine = document.createElement('div');
+            const sourceLabel = link.last_observation_source ? `Source: ${link.last_observation_source}` : 'Source: --';
+            const ageLabel = this.formatAge(link.age_sec);
+            updateLine.textContent = `${sourceLabel} • Updated: ${ageLabel}`;
+            content.appendChild(updateLine);
+
             if (!polyGroup.core.getPopup()) {
                 polyGroup.core.bindPopup(content, { closeButton: false, autoPan: false });
             } else {
@@ -339,6 +346,59 @@ class App {
 
         // Weather
         document.getElementById('weather-display').innerText = data.weather;
+
+        // Live Feed
+        this.updateLiveFeed(data.links);
+    }
+
+    updateLiveFeed(links) {
+        const liveLinks = links.filter(link => link.is_live);
+        const summaryEl = document.getElementById('live-feed-summary');
+        const listEl = document.getElementById('live-feed-list');
+
+        listEl.innerHTML = '';
+
+        if (liveLinks.length === 0) {
+            summaryEl.innerText = 'No live links configured';
+            return;
+        }
+
+        let staleCount = 0;
+
+        liveLinks.forEach(link => {
+            const ageSec = link.age_sec;
+            const isStale = typeof ageSec === 'number' ? ageSec > this.liveStaleThresholdSec : true;
+            if (isStale) staleCount += 1;
+
+            const item = document.createElement('div');
+            item.className = `live-feed-item ${isStale ? 'stale' : 'fresh'}`;
+
+            const dot = document.createElement('span');
+            dot.className = 'live-feed-dot';
+            item.appendChild(dot);
+
+            const name = document.createElement('div');
+            name.className = 'live-feed-name';
+            name.textContent = link.name;
+            item.appendChild(name);
+
+            const meta = document.createElement('div');
+            meta.className = 'live-feed-meta';
+            meta.textContent = `${this.formatAge(ageSec)} • ${link.last_observation_source || 'unknown'}`;
+            item.appendChild(meta);
+
+            listEl.appendChild(item);
+        });
+
+        summaryEl.innerText = `${liveLinks.length} live link${liveLinks.length === 1 ? '' : 's'} • ${staleCount} stale`;
+    }
+
+    formatAge(ageSec) {
+        if (typeof ageSec !== 'number') return 'no data';
+        if (ageSec < 1) return 'just now';
+        if (ageSec < 60) return `${Math.round(ageSec)}s ago`;
+        const minutes = Math.floor(ageSec / 60);
+        return `${minutes}m ago`;
     }
 }
 
