@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Body
+from pydantic import BaseModel
 # Trigger Reload
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +30,11 @@ sim_controller.start()
 
 # Analytics State
 history = deque(maxlen=60)
+
+# --- Schemas ---
+class LiveLinksUpdate(BaseModel):
+    link_ids: list[str] = []
+    mode: Optional[str] = None
 
 # Background History Loop
 def history_updater():
@@ -151,6 +157,43 @@ def get_live_state():
             "speed": sim_controller.time_scale
         }
     }
+
+def _apply_live_links(link_ids: list[str]):
+    mgr.policy.p_config['live_mode_links'] = link_ids
+    if hasattr(mgr, "adapter"):
+        mgr.adapter.set_live_links(link_ids)
+
+if not mgr.policy.p_config.get('live_mode_links'):
+    _apply_live_links(list(mgr.twin.links.keys()))
+
+@app.get("/admin/links")
+def list_links():
+    links = []
+    for link in mgr.twin.links.values():
+        links.append({
+            "id": link.id,
+            "name": link.name,
+            "type": link.type,
+            "coordinates": link.coordinates
+        })
+    return {"links": links}
+
+@app.get("/admin/live-links")
+def get_live_links():
+    live_links = mgr.policy.p_config.get('live_mode_links', [])
+    return {"live_mode_links": live_links}
+
+@app.post("/admin/live-links")
+def set_live_links(update: LiveLinksUpdate):
+    if update.mode and update.mode.lower() == "all":
+        requested = list(mgr.twin.links.keys())
+    else:
+        requested = update.link_ids or []
+
+    valid = [link_id for link_id in requested if link_id in mgr.twin.links]
+    unknown = [link_id for link_id in requested if link_id not in mgr.twin.links]
+    _apply_live_links(valid)
+    return {"live_mode_links": valid, "unknown_links": unknown}
 
 # --- ADMIN / GOD MODE ---
 

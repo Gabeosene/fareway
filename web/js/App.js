@@ -102,6 +102,11 @@ class App {
         };
 
         document.getElementById('btn-quote').onclick = () => this.generateQuote();
+
+        const liveAllBtn = document.getElementById('btn-live-all');
+        if (liveAllBtn) {
+            liveAllBtn.onclick = () => this.enableAllLiveLinks();
+        }
     }
 
     async generateQuote() {
@@ -150,6 +155,19 @@ class App {
             this.updateControlUI(data);
         } catch (e) {
             console.error("Control failed", e);
+        }
+    }
+
+    async enableAllLiveLinks() {
+        try {
+            await fetch(`${this.apiBase}/admin/live-links`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'all' })
+            });
+            this.pollState();
+        } catch (e) {
+            console.error("Enable live links failed", e);
         }
     }
 

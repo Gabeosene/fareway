@@ -15,6 +15,9 @@ class TwinAdapter:
         self.mgr = manager
         self.live_mode_links = set(manager.policy.p_config.get('live_mode_links', []))
 
+    def set_live_links(self, link_ids):
+        self.live_mode_links = set(link_ids or [])
+
     def ingest(self, obs: TwinObservation):
         # 1. Routing Strategy: Hybrid Mode
         # If a link is set to "Live Mode", ignore Synthetic (sim) inputs

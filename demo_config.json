@@ -742,7 +742,17 @@
         "reward_amount_credits": 100,
         "currency_symbol": "HUF",
         "live_mode_links": [
-            "link_szechenyi"
+            "link_szechenyi",
+            "link_erzsebet",
+            "link_margit",
+            "link_szabadsag",
+            "link_hungaria",
+            "link_m4",
+            "link_petofi",
+            "link_rakoczi",
+            "link_nagykorut",
+            "link_andrassy",
+            "link_vaci"
         ]
     },
     "simulation": {
