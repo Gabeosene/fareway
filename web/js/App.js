@@ -2,6 +2,7 @@ import { WindowManager } from './WindowManager.js';
 
 class App {
     constructor() {
+        this.apiBase = window.location.origin;
         this.wm = new WindowManager();
         this.map = null;
         this.polylines = {};
@@ -90,11 +91,11 @@ class App {
 
         // God Mode
         window.triggerAccident = async () => {
-            await fetch('http://localhost:8000/simulate/accident', { method: 'POST' });
+            await fetch(`${this.apiBase}/simulate/accident`, { method: 'POST' });
         };
 
         window.setWeather = async (w) => {
-            await fetch(`http://localhost:8000/admin/weather/${w}`, { method: 'POST' });
+            await fetch(`${this.apiBase}/admin/weather/${w}`, { method: 'POST' });
         };
     }
 
@@ -103,7 +104,7 @@ class App {
         if (speed) payload.speed = speed;
 
         try {
-            const resp = await fetch('http://localhost:8000/sim/control', {
+            const resp = await fetch(`${this.apiBase}/sim/control`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -140,7 +141,7 @@ class App {
 
     async pollState() {
         try {
-            const response = await fetch('http://localhost:8000/live');
+            const response = await fetch(`${this.apiBase}/live`);
             const data = await response.json();
 
             // Global Updates
@@ -197,7 +198,7 @@ class App {
 
     async updateCharts() {
         try {
-            const resp = await fetch('http://localhost:8000/stats/history');
+            const resp = await fetch(`${this.apiBase}/stats/history`);
             const history = await resp.json();
 
             this.chart.data.labels = history.map(() => '');

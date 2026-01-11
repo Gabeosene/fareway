@@ -190,7 +190,7 @@ class QuoteService:
     def create_quote(self, user_id: str, link_id: str) -> Quote:
         user = self.twin.users.get(user_id)
         if not user:
-            raise ValueError("User found")
+            raise ValueError("User not found")
         
         quote = self.policy.calculate_quote(user, link_id)
         self.active_quotes[quote.id] = quote
