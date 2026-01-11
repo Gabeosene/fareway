@@ -37,6 +37,7 @@ class LiveAPISource:
         if not self.link_ids:
             logger.warning("Live source has no link IDs to publish observations.")
             return
+        self._stop_event.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
@@ -44,6 +45,16 @@ class LiveAPISource:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=2.0)
+            self._thread = None
+
+    def set_link_ids(self, link_ids: Iterable[str]):
+        self.link_ids = list(link_ids)
+        self._link_cycle = cycle(self.link_ids) if self.link_ids else None
+        if not self.link_ids:
+            self.stop()
+            return
+        if not self._thread or not self._thread.is_alive():
+            self.start()
 
     def _fetch_external_payload(self) -> Optional[dict]:
         try:

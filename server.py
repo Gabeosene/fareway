@@ -168,6 +168,8 @@ def _apply_live_links(link_ids: list[str]):
     mgr.policy.p_config['live_mode_links'] = link_ids
     if hasattr(mgr, "adapter"):
         mgr.adapter.set_live_links(link_ids)
+    if "live_source" in globals():
+        live_source.set_link_ids(link_ids)
 
 if not mgr.policy.p_config.get('live_mode_links'):
     _apply_live_links(list(mgr.twin.links.keys()))
