@@ -181,6 +181,73 @@ body {
     min-height: 0 !important;
 }
 
+/* --- Data Table --- */
+.data-table {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-family: var(--font-data);
+    font-size: 11px;
+}
+
+.data-table-head {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 0.6fr 0.8fr;
+    gap: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+
+.data-table-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.data-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 0.6fr 0.8fr;
+    gap: 12px;
+    align-items: center;
+    color: var(--text-main);
+}
+
+.data-cell-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.data-badge {
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+}
+
+.data-ci-high {
+    color: var(--accent);
+}
+
+.data-ci-mid {
+    color: var(--warning);
+}
+
+.data-empty {
+    color: var(--text-dim);
+    font-size: 12px;
+    font-family: var(--font-ui);
+}
+
 /* --- Components --- */
 
 /* Simulation Controls (Floating Pill) */

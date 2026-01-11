@@ -188,6 +188,30 @@
         </div>
     </div>
 
+    <!-- 4. Data Panel: Link Telemetry -->
+    <div id="data-panel" class="window active" style="bottom: 24px; left: 24px; width: 340px;">
+        <div class="window-header">
+            <div class="window-title">Link Telemetry</div>
+            <div class="window-controls">
+                <button class="win-btn minimize"></button>
+            </div>
+        </div>
+
+        <div class="window-content">
+            <div class="data-table">
+                <div class="data-table-head">
+                    <span>Link</span>
+                    <span>Flow</span>
+                    <span>CI</span>
+                    <span>Price</span>
+                </div>
+                <div class="data-table-body" id="link-data-body">
+                    <div class="data-empty">Awaiting network data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- App Logic -->
     <script type="module" src="js/App.js"></script>
 

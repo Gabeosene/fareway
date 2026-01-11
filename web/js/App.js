@@ -518,6 +518,7 @@ class App {
         // Live Feed
         this.updateLiveFeed(data.links);
         this.syncAdminSelectionFromLive(data.links);
+        this.updateLinkTelemetry(data.links);
     }
 
     updateLiveFeed(links) {
@@ -560,6 +561,56 @@ class App {
         });
 
         summaryEl.innerText = `${liveLinks.length} live link${liveLinks.length === 1 ? '' : 's'} • ${staleCount} stale (> ${this.liveStaleThresholdSec}s)`;
+    }
+
+    updateLinkTelemetry(links) {
+        const bodyEl = document.getElementById('link-data-body');
+        if (!bodyEl) return;
+
+        bodyEl.innerHTML = '';
+
+        if (!Array.isArray(links) || links.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'data-empty';
+            empty.textContent = 'No telemetry available yet.';
+            bodyEl.appendChild(empty);
+            return;
+        }
+
+        const sorted = [...links].sort((a, b) => (b.ci ?? 0) - (a.ci ?? 0));
+        sorted.slice(0, 10).forEach(link => {
+            const row = document.createElement('div');
+            row.className = 'data-row';
+
+            const nameCell = document.createElement('div');
+            nameCell.className = 'data-cell-name';
+            nameCell.textContent = link.name;
+
+            if (link.is_live) {
+                const badge = document.createElement('span');
+                badge.className = 'data-badge';
+                badge.textContent = 'Live';
+                nameCell.appendChild(badge);
+            }
+
+            const flowCell = document.createElement('div');
+            flowCell.textContent = `${link.flow}/${link.capacity}`;
+
+            const ciCell = document.createElement('div');
+            const ciValue = Number.isFinite(link.ci) ? link.ci.toFixed(2) : '--';
+            ciCell.textContent = ciValue;
+            if (link.ci > 0.8) ciCell.classList.add('data-ci-high');
+            else if (link.ci > 0.6) ciCell.classList.add('data-ci-mid');
+
+            const priceCell = document.createElement('div');
+            priceCell.textContent = `${link.price} HUF`;
+
+            row.appendChild(nameCell);
+            row.appendChild(flowCell);
+            row.appendChild(ciCell);
+            row.appendChild(priceCell);
+            bodyEl.appendChild(row);
+        });
     }
 
     syncAdminSelectionFromLive(links) {
