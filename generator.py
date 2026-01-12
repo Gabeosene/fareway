@@ -1,7 +1,7 @@
 import math
 import random
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 class TrafficGenerator:
     def __init__(self):
@@ -59,9 +59,10 @@ class TrafficGenerator:
 
         return int(capacity * total_factor)
 
-    def get_virtual_time(self) -> str:
+    def get_virtual_time(self, current_time: Optional[float] = None) -> str:
         """Returns the current simulation time as a HH:MM string."""
-        elapsed = time.time() - self.start_time
+        now = current_time if current_time is not None else time.time()
+        elapsed = now - self.start_time
         cycle_progress = (elapsed % self.cycle_duration) / self.cycle_duration
         
         # Map 0..1 to 0..24 hours

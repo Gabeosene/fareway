@@ -5,13 +5,13 @@ from math import radians, cos, sin, asin, sqrt
 
 # Configuration
 OVERPASS_URL = "http://overpass-api.de/api/interpreter"
-# Bounding Box for Budapest Center (Strict Downtown)
-BBOX = "47.47,19.02,47.53,19.08"
+# Bounding Box for Greater Budapest coverage
+BBOX = "47.38,18.90,47.62,19.33"
 
 QUERY = f"""
 [out:json][timeout:45];
 (
-  way["highway"~"primary|secondary"]({BBOX});
+  way["highway"~"trunk|primary|secondary|tertiary"]({BBOX});
 );
 out body;
 >;

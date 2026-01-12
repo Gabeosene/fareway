@@ -73,13 +73,20 @@ class LiveAPISource:
             logger.warning("Live source API poll failed: %s", exc)
             return None
 
-    def _build_observation(self, payload: Optional[dict]) -> TwinObservation:
+    def _build_observation(
+        self,
+        payload: Optional[dict],
+        link_cycle: Optional[Iterable[str]] = None,
+    ) -> TwinObservation:
         now = time.time()
         unixtime = payload.get("unixtime") if payload else None
         source_ts = float(unixtime) if unixtime is not None else now
         speed_seed = int(unixtime) if unixtime is not None else int(now * 10)
         speed_kmh = 20.0 + (speed_seed % 70)
-        link_id = next(self._link_cycle)
+        cycle_iter = link_cycle or self._link_cycle
+        if not cycle_iter:
+            raise RuntimeError("Live source has no active link cycle.")
+        link_id = next(cycle_iter)
         return TwinObservation(
             source="live-api",
             link_id=link_id,
@@ -90,7 +97,17 @@ class LiveAPISource:
 
     def _run(self):
         while not self._stop_event.is_set():
+            link_cycle = self._link_cycle
+            if not link_cycle:
+                time.sleep(self.poll_interval)
+                continue
             payload = self._fetch_external_payload()
-            obs = self._build_observation(payload)
-            self.adapter.ingest(obs)
+            try:
+                obs = self._build_observation(payload, link_cycle=link_cycle)
+            except Exception as exc:
+                logger.warning("Live source failed to build observation: %s", exc)
+                time.sleep(self.poll_interval)
+                continue
+            if obs:
+                self.adapter.ingest(obs)
             time.sleep(self.poll_interval)

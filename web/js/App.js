@@ -9,10 +9,19 @@ class App {
         this.liveMarkers = {};
         this.chart = null;
         this.isChartRequestInFlight = false;
+        this.isPollRequestInFlight = false;
+        this.pollIntervalMs = 1500;
+        this.chartPollIntervalMs = 10000;
+        this.uiRefreshMs = 2000;
+        this.lastUiRefreshAt = 0;
         this.liveStaleThresholdSec = 10;
         this.adminLinks = [];
         this.liveLinkIds = new Set();
         this.adminSelectionDirty = false;
+        this.geometryLoaded = false;
+        this.linkMeta = new Map();
+        this.linkStateCache = new Map();
+        this.linkStyleCache = new Map();
 
         this.state = {
             paused: false,
@@ -21,21 +30,28 @@ class App {
             viewMode: "live"
         };
 
+        this.pollInterval = null;
+        this.chartPollInterval = null;
+    }
+
+    async bootstrap() {
         this.initMap();
         this.initChart();
         this.initListeners();
-        this.initAdminLinks();
+        await this.initAdminLinks();
         this.setViewMode(this.state.viewMode);
+        this.pollState();
 
         // Start Loops
-        this.pollInterval = setInterval(() => this.pollState(), 500);
-        this.chartPollInterval = setInterval(() => this.updateCharts(), 10000);
+        this.pollInterval = setInterval(() => this.pollState(), this.pollIntervalMs);
+        this.chartPollInterval = setInterval(() => this.updateCharts(), this.chartPollIntervalMs);
     }
 
     initMap() {
         this.map = L.map('map', {
             zoomControl: false,
-            attributionControl: false
+            attributionControl: false,
+            preferCanvas: true
         }).setView([47.4979, 19.0402], 13);
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -199,18 +215,22 @@ class App {
         }
     }
 
-    async initAdminLinks() {
-        await Promise.all([this.fetchAdminLinks(), this.fetchLiveLinks()]);
+    async initAdminLinks(includeCoords = null) {
+        const shouldIncludeCoords = includeCoords ?? !this.geometryLoaded;
+        await Promise.all([this.fetchAdminLinks(shouldIncludeCoords), this.fetchLiveLinks()]);
         this.adminSelectionDirty = false;
         this.renderAdminLinks();
     }
 
-    async fetchAdminLinks() {
+    async fetchAdminLinks(includeCoords = false) {
         const listEl = document.getElementById('admin-live-list');
         try {
-            const resp = await fetch(`${this.apiBase}/admin/links`);
+            const url = includeCoords ? `${this.apiBase}/admin/links?include_coords=1` : `${this.apiBase}/admin/links`;
+            const resp = await fetch(url);
             const data = await resp.json();
-            this.adminLinks = (data.links || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+            const links = data.links || [];
+            this.adminLinks = links.slice().sort((a, b) => a.name.localeCompare(b.name));
+            this.applyNetworkGeometry(links);
         } catch (e) {
             console.error("Admin links fetch failed", e);
             if (listEl && !this.adminLinks.length) {
@@ -227,6 +247,196 @@ class App {
         } catch (e) {
             console.error("Live links fetch failed", e);
         }
+    }
+
+    applyNetworkGeometry(links) {
+        if (!Array.isArray(links)) return;
+        let hasCoords = false;
+
+        links.forEach(link => {
+            if (!link || !link.id) return;
+            const meta = this.getLinkMeta(link);
+            if (Array.isArray(link.coordinates) && link.coordinates.length > 1) {
+                meta.coordinates = link.coordinates;
+                const center = this.getCenterPoint(link.coordinates);
+                if (center) meta.center = center;
+                this.linkMeta.set(link.id, meta);
+                this.createPolylineForLink(link.id, link.coordinates, meta.type || link.type);
+                hasCoords = true;
+            }
+        });
+
+        if (hasCoords) {
+            this.geometryLoaded = true;
+        }
+    }
+
+    createPolylineForLink(linkId, coordinates, type) {
+        if (!this.map || this.polylines[linkId]) return;
+        if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+
+        const isTransit = type === 'transit';
+        const baseColor = isTransit ? '#a855f7' : '#334155';
+
+        const glow = L.polyline(coordinates, {
+            color: baseColor,
+            weight: isTransit ? 8 : 12,
+            opacity: 0.15,
+            lineCap: 'round',
+            className: 'glow-layer',
+            interactive: false
+        }).addTo(this.map);
+
+        const core = L.polyline(coordinates, {
+            color: '#444',
+            weight: isTransit ? 3 : 4,
+            opacity: 0.6,
+            lineCap: 'round',
+            dashArray: isTransit ? '5, 8' : null
+        }).addTo(this.map);
+
+        const polyGroup = { core, glow };
+        core.bindPopup('', { closeButton: false, autoPan: false });
+        core.on('popupopen', () => this.refreshPopup(linkId));
+        this.polylines[linkId] = polyGroup;
+    }
+
+    getCenterPoint(coordinates) {
+        if (!Array.isArray(coordinates) || coordinates.length === 0) return null;
+        const mid = coordinates[Math.floor(coordinates.length / 2)];
+        if (!Array.isArray(mid) || mid.length < 2) return null;
+        return mid;
+    }
+
+    getLinkMeta(link) {
+        if (!link || !link.id) return {};
+        const existing = this.linkMeta.get(link.id) || {};
+        let changed = false;
+
+        if (link.name && link.name !== existing.name) {
+            existing.name = link.name;
+            changed = true;
+        }
+        if (link.type && link.type !== existing.type) {
+            existing.type = link.type;
+            changed = true;
+        }
+        if (changed) {
+            this.linkMeta.set(link.id, existing);
+        }
+        return existing;
+    }
+
+    getLinkName(link) {
+        if (!link) return 'Unknown';
+        if (link.name) return link.name;
+        const meta = this.linkMeta.get(link.id);
+        return (meta && meta.name) ? meta.name : link.id;
+    }
+
+    getLinkType(link) {
+        if (!link) return 'road';
+        if (link.type) return link.type;
+        const meta = this.linkMeta.get(link.id);
+        return (meta && meta.type) ? meta.type : 'road';
+    }
+
+    getLinkCenter(link) {
+        if (!link || !link.id) return null;
+        const meta = this.linkMeta.get(link.id);
+        if (meta && Array.isArray(meta.center)) return meta.center;
+        if (Array.isArray(link.coordinates) && link.coordinates.length > 1) {
+            const center = this.getCenterPoint(link.coordinates);
+            if (center) {
+                const updated = meta ? { ...meta } : {};
+                updated.coordinates = link.coordinates;
+                updated.center = center;
+                this.linkMeta.set(link.id, updated);
+                return center;
+            }
+        }
+        return null;
+    }
+
+    getLinkStyle(link, type) {
+        const ci = typeof link.ci === 'number' ? link.ci : 0;
+        let color = '#334155';
+        let glowColor = '#334155';
+
+        if (ci > 0.4) { color = '#00f2ff'; glowColor = '#00f2ff'; }
+        if (ci > 0.6) { color = '#ffcc00'; glowColor = '#ffcc00'; }
+        if (ci > 0.8) { color = '#ff0055'; glowColor = '#ff0055'; }
+
+        if (type === 'transit') {
+            color = '#a855f7';
+            glowColor = '#a855f7';
+        }
+
+        return {
+            color,
+            glowColor,
+            weight: ci > 0.8 ? 6 : (type === 'transit' ? 3 : 5),
+            opacity: ci > 0.1 ? 1.0 : 0.4,
+            glowOpacity: ci > 0.1 ? 0.25 : 0.05
+        };
+    }
+
+    refreshPopup(linkId) {
+        const polyGroup = this.polylines[linkId];
+        if (!polyGroup) return;
+        const state = this.linkStateCache.get(linkId);
+        if (!state) return;
+        const content = this.buildPopupContent(state);
+        if (!polyGroup.core.getPopup()) {
+            polyGroup.core.bindPopup(content, { closeButton: false, autoPan: false });
+            return;
+        }
+        polyGroup.core.setPopupContent(content);
+    }
+
+    buildPopupContent(state) {
+        const content = document.createElement('div');
+        content.style.fontFamily = "'Courier New'";
+        content.style.fontSize = '12px';
+
+        const nameEl = document.createElement('strong');
+        nameEl.textContent = state.name || state.id;
+        content.appendChild(nameEl);
+        content.appendChild(document.createElement('br'));
+
+        const badge = document.createElement('span');
+        badge.textContent = state.is_live ? '[LIVE FEED]' : '[SIMULATED]';
+        badge.style.color = state.is_live ? '#00ff00' : '#888';
+        if (state.is_live) {
+            badge.style.fontWeight = 'bold';
+        }
+        content.appendChild(badge);
+        content.appendChild(document.createElement('br'));
+
+        const flowLine = document.createElement('div');
+        flowLine.append('Flow: ', String(state.flow), ' / ', String(state.capacity));
+        content.appendChild(flowLine);
+
+        const ciLine = document.createElement('div');
+        const ciValue = Number.isFinite(state.ci) ? state.ci.toFixed(2) : String(state.ci);
+        ciLine.append('CI: ', ciValue);
+        content.appendChild(ciLine);
+
+        const priceLine = document.createElement('div');
+        const priceLabel = document.createElement('span');
+        priceLabel.textContent = 'Price: ';
+        const priceValue = document.createElement('b');
+        priceValue.textContent = String(state.price);
+        priceLine.append(priceLabel, priceValue, ' HUF');
+        content.appendChild(priceLine);
+
+        const updateLine = document.createElement('div');
+        const sourceLabel = state.last_observation_source ? `Source: ${state.last_observation_source}` : 'Source: --';
+        const ageLabel = this.formatAge(state.age_sec);
+        updateLine.textContent = `${sourceLabel} -> Updated: ${ageLabel}`;
+        content.appendChild(updateLine);
+
+        return content;
     }
 
     renderAdminLinks() {
@@ -287,7 +497,7 @@ class App {
         if (!summaryEl) return;
         const total = this.adminLinks.length;
         const liveCount = this.liveLinkIds.size;
-        summaryEl.innerText = `${liveCount} live link${liveCount === 1 ? '' : 's'} selected${total ? ` • ${total} total` : ''}`;
+        summaryEl.innerText = `${liveCount} live link${liveCount === 1 ? '' : 's'} selected${total ? ` - ${total} total` : ''}`;
     }
 
     async applyAdminLiveLinks() {
@@ -342,9 +552,16 @@ class App {
     }
 
     async pollState() {
+        if (this.isPollRequestInFlight || document.hidden) return;
+        this.isPollRequestInFlight = true;
+        const includeCoords = !this.geometryLoaded;
+        const url = includeCoords ? `${this.apiBase}/live?include_coords=1` : `${this.apiBase}/live`;
         try {
-            const response = await fetch(`${this.apiBase}/live`);
+            const response = await fetch(url);
             const data = await response.json();
+            if (includeCoords) {
+                this.applyNetworkGeometry(data.links);
+            }
 
             // Global Updates
             const simTimeEl = document.getElementById('sim-time');
@@ -357,120 +574,77 @@ class App {
             this.updateMap(data.links);
 
             // Stats Panels
-            this.updateStats(data);
+            const now = Date.now();
+            const refreshLists = (now - this.lastUiRefreshAt) >= this.uiRefreshMs;
+            if (refreshLists) this.lastUiRefreshAt = now;
+            this.updateStats(data, refreshLists);
 
         } catch (e) {
             console.error("Poll Error:", e);
+        } finally {
+            this.isPollRequestInFlight = false;
         }
     }
 
     updateMap(links) {
-        const currentLinkIds = new Set(links.map(link => link.id));
+        if (!Array.isArray(links)) return;
+        const currentLinkIds = new Set();
 
         links.forEach(link => {
+            if (!link || !link.id) return;
+            currentLinkIds.add(link.id);
+
+            const meta = this.getLinkMeta(link);
+            const type = meta.type || link.type || 'road';
+            const name = meta.name || link.name || link.id;
+
             let polyGroup = this.polylines[link.id];
-
-            if (!polyGroup && link.coordinates && link.coordinates.length > 1) {
-                // 1. Glow Line (RESTORING NEON GLOW)
-                const glowColor = link.type === 'transit' ? '#a855f7' : (link.ci > 0.8 ? '#ff0055' : '#00f2ff');
-                const glow = L.polyline(link.coordinates, {
-                    color: glowColor,
-                    weight: link.type === 'transit' ? 8 : 12,
-                    opacity: 0.2,
-                    lineCap: 'round',
-                    className: 'glow-layer'
-                }).addTo(this.map);
-
-                // 2. Core Line
-                let weight = link.type === 'transit' ? 3 : (link.capacity > 2000 ? 5 : 3);
-                const dash = link.type === 'transit' ? '5, 8' : null;
-
-                const core = L.polyline(link.coordinates, {
-                    color: '#444',
-                    weight: weight,
-                    opacity: 1.0,
-                    lineCap: 'round',
-                    dashArray: dash
-                }).addTo(this.map);
-
-                this.polylines[link.id] = { core: core, glow: glow };
-                polyGroup = this.polylines[link.id];
+            if (!polyGroup) {
+                const coords = meta.coordinates || link.coordinates;
+                if (coords && coords.length > 1) {
+                    this.createPolylineForLink(link.id, coords, type);
+                    polyGroup = this.polylines[link.id];
+                }
             }
 
             if (!polyGroup) return;
 
-            // Color Logic Matches Style.css Neon
-            let color = '#334155'; // Dark Grey (flow)
-            let glowColor = '#334155';
+            const style = this.getLinkStyle(link, type);
+            const prevStyle = this.linkStyleCache.get(link.id);
+            if (!prevStyle ||
+                prevStyle.color !== style.color ||
+                prevStyle.glowColor !== style.glowColor ||
+                prevStyle.weight !== style.weight ||
+                prevStyle.opacity !== style.opacity ||
+                prevStyle.glowOpacity !== style.glowOpacity) {
+                polyGroup.core.setStyle({
+                    color: style.color,
+                    weight: style.weight,
+                    opacity: style.opacity
+                });
 
-            if (link.ci > 0.4) { color = '#00f2ff'; glowColor = '#00f2ff'; } // Cyan (Active)
-            if (link.ci > 0.6) { color = '#ffcc00'; glowColor = '#ffcc00'; } // Warning
-            if (link.ci > 0.8) { color = '#ff0055'; glowColor = '#ff0055'; } // Danger
-
-            if (link.type === 'transit') {
-                color = '#a855f7';
-                glowColor = '#a855f7';
+                polyGroup.glow.setStyle({
+                    color: style.glowColor,
+                    opacity: style.glowOpacity
+                });
+                this.linkStyleCache.set(link.id, style);
             }
 
-            // Update Core
-            polyGroup.core.setStyle({
-                color: color,
-                weight: link.ci > 0.8 ? 6 : (link.type === 'transit' ? 3 : 5),
-                opacity: link.ci > 0.1 ? 1.0 : 0.4
+            this.linkStateCache.set(link.id, {
+                id: link.id,
+                name: name,
+                is_live: link.is_live,
+                flow: link.flow,
+                capacity: link.capacity,
+                ci: link.ci,
+                price: link.price,
+                last_observation_source: link.last_observation_source,
+                age_sec: link.age_sec
             });
 
-            // Update Glow
-            polyGroup.glow.setStyle({
-                color: glowColor,
-                opacity: link.ci > 0.1 ? 0.25 : 0.05
-            });
-
-            // Popup / Tooltip
-            const content = document.createElement('div');
-            content.style.fontFamily = "'Courier New'";
-            content.style.fontSize = '12px';
-
-            const nameEl = document.createElement('strong');
-            nameEl.textContent = link.name;
-            content.appendChild(nameEl);
-            content.appendChild(document.createElement('br'));
-
-            const badge = document.createElement('span');
-            badge.textContent = link.is_live ? '[LIVE FEED]' : '[SIMULATED]';
-            badge.style.color = link.is_live ? '#00ff00' : '#888';
-            if (link.is_live) {
-                badge.style.fontWeight = 'bold';
-            }
-            content.appendChild(badge);
-            content.appendChild(document.createElement('br'));
-
-            const flowLine = document.createElement('div');
-            flowLine.append('Flow: ', String(link.flow), ' / ', String(link.capacity));
-            content.appendChild(flowLine);
-
-            const ciLine = document.createElement('div');
-            const ciValue = Number.isFinite(link.ci) ? link.ci.toFixed(2) : String(link.ci);
-            ciLine.append('CI: ', ciValue);
-            content.appendChild(ciLine);
-
-            const priceLine = document.createElement('div');
-            const priceLabel = document.createElement('span');
-            priceLabel.textContent = 'Price: ';
-            const priceValue = document.createElement('b');
-            priceValue.textContent = String(link.price);
-            priceLine.append(priceLabel, priceValue, ' HUF');
-            content.appendChild(priceLine);
-
-            const updateLine = document.createElement('div');
-            const sourceLabel = link.last_observation_source ? `Source: ${link.last_observation_source}` : 'Source: --';
-            const ageLabel = this.formatAge(link.age_sec);
-            updateLine.textContent = `${sourceLabel} • Updated: ${ageLabel}`;
-            content.appendChild(updateLine);
-
-            if (!polyGroup.core.getPopup()) {
-                polyGroup.core.bindPopup(content, { closeButton: false, autoPan: false });
-            } else {
-                polyGroup.core.setPopupContent(content);
+            const popup = polyGroup.core.getPopup();
+            if (popup && popup.isOpen && popup.isOpen()) {
+                this.refreshPopup(link.id);
             }
         });
 
@@ -481,15 +655,18 @@ class App {
             this.map.removeLayer(polyGroup.core);
             this.map.removeLayer(polyGroup.glow);
             delete this.polylines[linkId];
+            this.linkStateCache.delete(linkId);
+            this.linkStyleCache.delete(linkId);
         });
     }
 
     updateLiveMarkers(links) {
+        if (!Array.isArray(links)) return;
         const liveLinkIds = new Set();
+
         links.forEach(link => {
-            if (!link.is_live || !Array.isArray(link.coordinates) || link.coordinates.length === 0) return;
-            const coordIndex = Math.floor(link.coordinates.length / 2);
-            const latLng = link.coordinates[coordIndex];
+            if (!link.is_live) return;
+            const latLng = this.getLinkCenter(link);
             if (!Array.isArray(latLng) || latLng.length < 2) return;
 
             liveLinkIds.add(link.id);
@@ -497,6 +674,7 @@ class App {
             const isStale = typeof ageSec === 'number' ? ageSec > this.liveStaleThresholdSec : true;
             const markerClass = isStale ? 'live-marker live-marker-stale' : 'live-marker live-marker-fresh';
             const color = isStale ? '#64748b' : '#22c55e';
+            const labelName = this.getLinkName(link);
 
             let marker = this.liveMarkers[link.id];
             if (!marker) {
@@ -508,7 +686,7 @@ class App {
                     fillOpacity: 0.9,
                     className: markerClass
                 }).addTo(this.map);
-                marker.bindTooltip(`${link.name} • ${isStale ? 'stale' : 'live'}`, {
+                marker.bindTooltip(`${labelName} -> ${isStale ? 'stale' : 'live'}`, {
                     direction: 'top',
                     offset: [0, -6],
                     opacity: 0.8
@@ -521,7 +699,7 @@ class App {
                     fillColor: color,
                     className: markerClass
                 });
-                marker.setTooltipContent(`${link.name} • ${isStale ? 'stale' : 'live'}`);
+                marker.setTooltipContent(`${labelName} -> ${isStale ? 'stale' : 'live'}`);
             }
         });
 
@@ -550,7 +728,7 @@ class App {
         }
     }
 
-    updateStats(data) {
+    updateStats(data, refreshLists = true) {
         // Update Policy Panel
         const pol = data.policy;
         document.getElementById('sens-display').innerText = pol.sensitivity.toFixed(1);
@@ -566,6 +744,8 @@ class App {
         // Weather
         document.getElementById('weather-display').innerText = data.weather;
 
+        if (!refreshLists) return;
+
         // Live Feed
         this.updateLiveFeed(data.links);
         this.syncAdminSelectionFromLive(data.links);
@@ -573,6 +753,7 @@ class App {
     }
 
     updateLiveFeed(links) {
+        if (!Array.isArray(links)) return;
         const liveLinks = links.filter(link => link.is_live);
         const summaryEl = document.getElementById('live-feed-summary');
         const listEl = document.getElementById('live-feed-list');
@@ -600,18 +781,18 @@ class App {
 
             const name = document.createElement('div');
             name.className = 'live-feed-name';
-            name.textContent = link.name;
+            name.textContent = this.getLinkName(link);
             item.appendChild(name);
 
             const meta = document.createElement('div');
             meta.className = 'live-feed-meta';
-            meta.textContent = `${this.formatAge(ageSec)} • ${link.last_observation_source || 'unknown'}`;
+            meta.textContent = `${this.formatAge(ageSec)} -> ${link.last_observation_source || 'unknown'}`;
             item.appendChild(meta);
 
             listEl.appendChild(item);
         });
 
-        summaryEl.innerText = `${liveLinks.length} live link${liveLinks.length === 1 ? '' : 's'} • ${staleCount} stale (> ${this.liveStaleThresholdSec}s)`;
+        summaryEl.innerText = `${liveLinks.length} live link${liveLinks.length === 1 ? '' : 's'} -> ${staleCount} stale (> ${this.liveStaleThresholdSec}s)`;
     }
 
     updateLinkTelemetry(links) {
@@ -635,7 +816,7 @@ class App {
 
             const nameCell = document.createElement('div');
             nameCell.className = 'data-cell-name';
-            nameCell.textContent = link.name;
+            nameCell.textContent = this.getLinkName(link);
 
             if (link.is_live) {
                 const badge = document.createElement('span');
@@ -701,5 +882,9 @@ class App {
 
 // Boot
 window.onload = () => {
-    window.app = new App();
+    const app = new App();
+    window.app = app;
+    app.bootstrap().catch((err) => {
+        console.error("App bootstrap failed", err);
+    });
 };

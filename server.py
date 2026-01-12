@@ -15,6 +15,7 @@ import manager
 import generator
 from simulation_controller import SimulationController
 from connectors.live_source import LiveAPISource
+from connectors.bkk_source import BkkLiveSource
 from schemas import MetricType, TwinObservation
 
 # --- Initialize System ---
@@ -30,8 +31,48 @@ sim_controller = SimulationController(mgr, gen)
 sim_controller.start()
 
 # Initialize Live Connector
-live_source = LiveAPISource(mgr.adapter, list(mgr.twin.links.keys()))
-live_source.start()
+live_source = None
+bkk_source = None
+bkk_api_key = os.getenv("BKK_API_KEY")
+if bkk_api_key:
+    bkk_poll = float(os.getenv("BKK_POLL_INTERVAL", "10.0"))
+    bkk_match_max_m = float(os.getenv("BKK_MATCH_MAX_M", "150.0"))
+    bkk_shape_map = os.getenv("BKK_SHAPE_MAP_PATH", "data/bkk_shape_link_map.json")
+    bkk_trip_map = os.getenv("BKK_TRIP_MAP_PATH", "data/bkk_trip_shape_map.json")
+    bkk_route_map = os.getenv("BKK_ROUTE_MAP_PATH", "data/bkk_route_shape_map.json")
+    bkk_trip_updates_url = os.getenv(
+        "BKK_TRIP_UPDATES_URL",
+        "https://go.bkk.hu/api/query/v1/ws/gtfs-rt/full/TripUpdates.pb",
+    )
+    bkk_alerts_url = os.getenv(
+        "BKK_ALERTS_URL",
+        "https://go.bkk.hu/api/query/v1/ws/gtfs-rt/full/Alerts.pb",
+    )
+    bkk_enable_trip_updates = os.getenv("BKK_ENABLE_TRIP_UPDATES", "1") != "0"
+    bkk_enable_alerts = os.getenv("BKK_ENABLE_ALERTS", "1") != "0"
+    link_type_env = os.getenv("BKK_LINK_TYPES")
+    link_types = None
+    if link_type_env:
+        link_types = {t.strip().lower() for t in link_type_env.split(",") if t.strip()}
+    bkk_source = BkkLiveSource(
+        mgr.adapter,
+        list(mgr.twin.links.values()),
+        api_key=bkk_api_key,
+        poll_interval=bkk_poll,
+        max_match_m=bkk_match_max_m,
+        link_types=link_types,
+        shape_map_path=bkk_shape_map,
+        trip_map_path=bkk_trip_map,
+        route_map_path=bkk_route_map,
+        trip_updates_url=bkk_trip_updates_url,
+        alerts_url=bkk_alerts_url,
+        enable_trip_updates=bkk_enable_trip_updates,
+        enable_alerts=bkk_enable_alerts,
+    )
+    bkk_source.start()
+else:
+    live_source = LiveAPISource(mgr.adapter, list(mgr.twin.links.keys()))
+    live_source.start()
 
 # Analytics State
 history = deque(maxlen=60)
@@ -110,7 +151,7 @@ def control_sim(action: str = Body(..., embed=True), speed: Optional[float] = Bo
     }
 
 @app.get("/live")
-def get_live_state():
+def get_live_state(include_coords: bool = False):
     """Returns the full state of the Digital Twin."""
     network_state = []
     now = time.time()
@@ -129,7 +170,7 @@ def get_live_state():
 
         last_source = link.last_observation_source if link.last_observation_ts else None
 
-        network_state.append({
+        link_payload = {
             "id": l_id,
             "name": link.name,
             "flow": int(link.current_flow),
@@ -143,13 +184,15 @@ def get_live_state():
             "is_live": l_id in mgr.policy.p_config.get('live_mode_links', []),
             "last_observation_at": link.last_observation_ts,
             "last_observation_source": last_source,
-            "age_sec": age_sec,
-            "coordinates": link.coordinates 
-        })
+            "age_sec": age_sec
+        }
+        if include_coords:
+            link_payload["coordinates"] = link.coordinates
+        network_state.append(link_payload)
     
     return {
         "timestamp": now,
-        "sim_time": gen.get_virtual_time(), # This might need to be decoupled if we want time travel
+        "sim_time": gen.get_virtual_time(getattr(sim_controller, "sim_time", None)),
         "weather": gen.weather,
         "events": list(gen.active_events.keys()),
         "links": network_state,
@@ -168,22 +211,26 @@ def _apply_live_links(link_ids: list[str]):
     mgr.policy.p_config['live_mode_links'] = link_ids
     if hasattr(mgr, "adapter"):
         mgr.adapter.set_live_links(link_ids)
-    if "live_source" in globals():
+    if bkk_source:
+        bkk_source.set_link_ids(link_ids)
+    if live_source:
         live_source.set_link_ids(link_ids)
 
 if not mgr.policy.p_config.get('live_mode_links'):
     _apply_live_links(list(mgr.twin.links.keys()))
 
 @app.get("/admin/links")
-def list_links():
+def list_links(include_coords: bool = False):
     links = []
     for link in mgr.twin.links.values():
-        links.append({
+        payload = {
             "id": link.id,
             "name": link.name,
-            "type": link.type,
-            "coordinates": link.coordinates
-        })
+            "type": link.type
+        }
+        if include_coords:
+            payload["coordinates"] = link.coordinates
+        links.append(payload)
     return {"links": links}
 
 @app.get("/admin/live-links")
@@ -253,6 +300,12 @@ def trigger_event(event_name: str):
 @app.get("/stats/history")
 def get_stats_history():
     return list(history)
+
+@app.get("/bkk/status")
+def get_bkk_status():
+    if not bkk_source:
+        raise HTTPException(status_code=404, detail="BKK source not enabled")
+    return bkk_source.get_status()
 
 # --- USER API ---
 

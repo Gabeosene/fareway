@@ -29,6 +29,7 @@ class SimulationController:
         
         # Stats
         self.last_tick_duration = 0.0
+        self.sim_time = time.time()
 
     def start(self):
         if self.running:
@@ -64,18 +65,30 @@ class SimulationController:
     def step(self):
         """Advance one tick if paused."""
         if self.paused:
-            self._run_tick()
+            period = 1.0 / self.target_tick_rate
+            self._advance_sim_time(period)
+            self._run_tick(sim_time=self.sim_time)
+
+    def _advance_sim_time(self, real_elapsed: float):
+        if real_elapsed <= 0:
+            return
+        self.sim_time += real_elapsed * self.time_scale
 
     def _loop(self):
+        last_real_time = time.time()
         while not self._stop_event.is_set():
             if self.paused:
+                last_real_time = time.time()
                 time.sleep(0.1)
                 continue
 
             start_time = time.time()
+            real_elapsed = start_time - last_real_time
+            last_real_time = start_time
+            self._advance_sim_time(real_elapsed)
             
             # Execute Logic
-            self._run_tick()
+            self._run_tick(sim_time=self.sim_time)
             
             # Sleep to maintain rate (adjusted by time_scale)
             # Base rate is target_tick_rate (e.g. 2Hz = 0.5s period)
@@ -88,24 +101,32 @@ class SimulationController:
             sleep_time = max(0.0, period - elapsed)
             time.sleep(sleep_time)
 
-    def _run_tick(self):
+    def _run_tick(self, sim_time: Optional[float] = None):
         # 1. Update Traffic Flows
         # We need to access the logic that was previously in server.py
         # For now, we'll assume the manager/generator has the logic or we execute it here.
         # Ideally, this logic should be in a "Systems" class, but we will adapt the existing logic.
         
         now = time.time()
+        sim_now = sim_time if sim_time is not None else self.sim_time
+        live_mode_links = set(self.mgr.policy.p_config.get('live_mode_links', []))
+        if hasattr(self.mgr, "adapter"):
+            live_mode_links = set(getattr(self.mgr.adapter, "live_mode_links", live_mode_links))
         
         # --- LOGIC MOVED FROM SERVER.PY ---
         total_shifting_demand = 0.0
+        metro_flow = None
         
         # 1. Traffic Generation & Diversion
         for link_id, link in self.mgr.twin.links.items():
+            if link_id in live_mode_links:
+                continue
+
             # Get base flow
             # Note: Generator expects real time usually, but let's pass 'now'
             # If we want "Virtual Time", we should track it separately. 
             # For now, keeping it simple.
-            base_flow = self.gen.get_flow(link_id, link.capacity, now)
+            base_flow = self.gen.get_flow(link_id, link.capacity, sim_now)
             
             shifted_flow = 0
             if link.price_multiplier > 1.0:
@@ -113,39 +134,39 @@ class SimulationController:
                 diversion_pct = min(0.9, excess_p * 0.4)
                 shifted_flow = base_flow * diversion_pct
             
-            link.current_flow = base_flow - shifted_flow
+            sim_flow = base_flow - shifted_flow
             link.last_diversion = shifted_flow 
             
             if "Bridge" in link.name or "Ring" in link.name:
                 total_shifting_demand += shifted_flow
             
-            # self.mgr.twin.ingest_observation(link_id, link.current_flow)
-            
+            if link_id == "link_m4":
+                metro_flow = sim_flow
+                continue
+
             # [REFACTORED] Send to Adapter
             obs = TwinObservation(
                 source="sim-gen",
                 link_id=link_id,
                 timestamp=now,
                 metric=MetricType.FLOW_VEH_PER_HOUR,
-                value=link.current_flow
+                value=sim_flow
             )
             self.mgr.adapter.ingest(obs)
             
         # 2. Metro Absorption
         metro = self.mgr.twin.links.get("link_m4")
-        if metro:
-            metro.current_flow += total_shifting_demand
+        if metro and "link_m4" not in live_mode_links and metro_flow is not None:
+            metro_flow += total_shifting_demand
             metro.last_diversion = -total_shifting_demand
-            
-            # self.mgr.twin.ingest_observation("link_m4", metro.current_flow)
-            
+
             # [REFACTORED] Send to Adapter
             obs = TwinObservation(
                 source="sim-gen",
                 link_id="link_m4",
                 timestamp=now,
                 metric=MetricType.FLOW_VEH_PER_HOUR,
-                value=metro.current_flow
+                value=metro_flow
             )
             self.mgr.adapter.ingest(obs)
             

@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException, Body
 from typing import List, Optional
 from pydantic import BaseModel
+import time
 import manager
+from schemas import TwinObservation, MetricType
 
 app = FastAPI(title="Congestion Control API")
 
@@ -30,7 +32,14 @@ mgr = manager.get_manager()
 @app.post("/observations")
 def ingest_observation(obs: Observation):
     """Update Twin state (Simulation/Sensor input)."""
-    mgr.twin.ingest_observation(obs.link_id, obs.flow)
+    observation = TwinObservation(
+        source="api-observation",
+        link_id=obs.link_id,
+        timestamp=time.time(),
+        metric=MetricType.FLOW_VEH_PER_HOUR,
+        value=obs.flow,
+    )
+    mgr.adapter.ingest(observation)
     return {"status": "ok"}
 
 @app.get("/network/status")
