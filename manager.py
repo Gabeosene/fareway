@@ -198,21 +198,61 @@ class QuoteService:
         self.policy = policy
         self.active_quotes: Dict[str, Quote] = {}
         self.reservations: Dict[str, Reservation] = {}
+        self.reservation_retention_sec = self.twin.config.get("simulation", {}).get(
+            "reservation_retention_sec",
+            600,
+        )
+
+    def _purge_expired(self, now: Optional[float] = None):
+        now = now if now is not None else time.time()
+        active_hold_quote_ids = {
+            res.quote_id
+            for res in self.reservations.values()
+            if res.status == "HOLD" and now <= res.expires_at
+        }
+        expired_quotes = [
+            qid
+            for qid, q in self.active_quotes.items()
+            if now > q.expires_at and qid not in active_hold_quote_ids
+        ]
+        for qid in expired_quotes:
+            self.active_quotes.pop(qid, None)
+
+        expired_reservations = []
+        for rid, res in self.reservations.items():
+            if res.status == "HOLD" and now > res.expires_at:
+                res.status = "EXPIRED"
+            if self.reservation_retention_sec <= 0:
+                continue
+            if res.status == "CONFIRMED":
+                if res.confirmed_at is not None and now - res.confirmed_at > self.reservation_retention_sec:
+                    expired_reservations.append(rid)
+                continue
+            if now > res.expires_at:
+                if now - res.expires_at > self.reservation_retention_sec:
+                    expired_reservations.append(rid)
+        for rid in expired_reservations:
+            self.reservations.pop(rid, None)
 
     def create_quote(self, user_id: str, link_id: str) -> Quote:
+        self._purge_expired()
         user = self.twin.users.get(user_id)
         if not user:
             raise ValueError("User not found")
+        if link_id not in self.twin.links:
+            raise ValueError("Link not found")
         
         quote = self.policy.calculate_quote(user, link_id)
         self.active_quotes[quote.id] = quote
         return quote
 
     def reserve(self, quote_id: str) -> Reservation:
+        self._purge_expired()
         quote = self.active_quotes.get(quote_id)
         if not quote:
             raise ValueError("Quote not found")
         if time.time() > quote.expires_at:
+            self.active_quotes.pop(quote_id, None)
             raise ValueError("Quote expired")
             
         res = Reservation(
@@ -226,6 +266,7 @@ class QuoteService:
         return res
 
     def confirm(self, reservation_id: str) -> Dict:
+        self._purge_expired()
         res = self.reservations.get(reservation_id)
         if not res:
             raise ValueError("Reservation not found")
@@ -233,13 +274,18 @@ class QuoteService:
              # Idempotency check
             if res.status == "CONFIRMED":
                 return {"status": "CONFIRMED", "note": "Already Confirmed"}
+            if res.status == "EXPIRED":
+                raise ValueError("Reservation expired")
             raise ValueError("Reservation not valid for confirmation")
         if time.time() > res.expires_at:
             res.status = "EXPIRED"
+            self.reservations.pop(reservation_id, None)
             raise ValueError("Reservation expired")
             
         # Execute Transaction
-        quote = self.active_quotes[res.quote_id]
+        quote = self.active_quotes.get(res.quote_id)
+        if not quote:
+            raise ValueError("Quote not found")
         user = self.twin.users[res.user_id]
         
         if user.balance < quote.final_price:
@@ -250,6 +296,7 @@ class QuoteService:
         
         res.status = "CONFIRMED"
         res.confirmed_at = time.time()
+        self.active_quotes.pop(res.quote_id, None)
         
         # Telemetry
         self.twin.record_telemetry("booking_confirmed", {

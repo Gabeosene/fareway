@@ -80,9 +80,9 @@ def generate_network_table() -> Table:
         div_str = "-"
         if hasattr(link, 'last_diversion'):
             if link.last_diversion > 50:
-                div_str = f"[green]↓ {int(link.last_diversion)} diverted[/green]" # Leaving
+                div_str = f"[green]diverted {int(link.last_diversion)}[/green]"
             elif link.last_diversion < -50:
-                 div_str = f"[yellow]↑ {int(abs(link.last_diversion))} captured[/yellow]" # Entering (Metro)
+                div_str = f"[yellow]captured {int(abs(link.last_diversion))}[/yellow]"
 
         table.add_row(
             link.name,

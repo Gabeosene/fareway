@@ -63,6 +63,8 @@ def get_quotes(req: QuoteRequest):
     """Get travel options."""
     # For this demo, we return quotes for ALL links to show comparison
     # In reality, this would run a pathfinding algo
+    if req.user_id not in mgr.twin.users:
+        raise HTTPException(status_code=404, detail="User not found")
     quotes = []
     for link_id in mgr.twin.links.keys():
         q = mgr.service.create_quote(req.user_id, link_id)
