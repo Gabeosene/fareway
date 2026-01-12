@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import uuid
 from typing import Dict, List, Optional, Any
@@ -268,11 +269,44 @@ class QuoteService:
 # Factory to boostrap
 _singleton_manager = None
 
-def get_manager(config_path: str = "full_city_config.json"):
+def _load_extra_links(path: str):
+    if not path or not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return []
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        return payload.get("links", [])
+    return []
+
+def _merge_links(base_links, extra_links):
+    if not extra_links:
+        return base_links
+    seen = {link.get("id") for link in base_links if isinstance(link, dict)}
+    merged = list(base_links)
+    for link in extra_links:
+        if not isinstance(link, dict):
+            continue
+        link_id = link.get("id")
+        if not link_id or link_id in seen:
+            continue
+        merged.append(link)
+        seen.add(link_id)
+    return merged
+
+def get_manager(config_path: str = "full_city_config.json", extra_links_path: Optional[str] = None):
     global _singleton_manager
     if _singleton_manager is None:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
+        extra_links_path = extra_links_path or os.getenv("TRANSIT_LINKS_PATH")
+        extra_links = _load_extra_links(extra_links_path) if extra_links_path else []
+        if extra_links:
+            config['network']['links'] = _merge_links(config.get('network', {}).get('links', []), extra_links)
         twin = CongestionTwin(config)
         policy = PolicyEngine(twin)
         service = QuoteService(twin, policy)
