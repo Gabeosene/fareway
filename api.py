@@ -39,8 +39,8 @@ def ingest_observation(obs: Observation):
         metric=MetricType.FLOW_VEH_PER_HOUR,
         value=obs.flow,
     )
-    mgr.adapter.ingest(observation)
-    return {"status": "ok"}
+    accepted = mgr.adapter.ingest(observation)
+    return {"status": "accepted" if accepted else "dropped", "accepted": accepted}
 
 @app.get("/network/status")
 def get_network_status():

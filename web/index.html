@@ -42,6 +42,16 @@
 
         <div class="control-sep"></div>
 
+        <div class="control-group marker-toggle" style="display:flex; align-items:center; gap:8px;">
+            <span class="toggle-label">Markers</span>
+            <label class="toggle">
+                <input type="checkbox" id="toggle-markers" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+
+        <div class="control-sep"></div>
+
         <div class="control-group live-only" style="display:flex; align-items:center; gap:8px;">
             <div class="live-label">Live View</div>
         </div>
@@ -101,6 +111,27 @@
                 <span class="stat-value" style="color: var(--success)">12,450 HUF</span>
             </div>
 
+            <div class="route-panel">
+                <div class="route-header">Route Planner</div>
+                <div class="route-row">
+                    <span class="route-label">Start</span>
+                    <span class="route-value" id="route-start">--</span>
+                </div>
+                <div class="route-row">
+                    <span class="route-label">End</span>
+                    <span class="route-value" id="route-end">--</span>
+                </div>
+                <div class="route-actions">
+                    <button class="btn" id="btn-route-plan">Plan Route</button>
+                    <button class="btn primary" id="btn-route-activate">Activate Route</button>
+                    <button class="btn" id="btn-route-focus">Focus Route</button>
+                    <button class="btn" id="btn-route-clear">Clear Selection</button>
+                </div>
+                <div class="route-summary" id="route-plan-summary">No route planned.</div>
+                <div class="route-summary route-active" id="route-active-summary">No active route.</div>
+                <div class="route-hint">Click two roads on the map to set start/end.</div>
+            </div>
+
             <button class="btn primary" id="btn-quote" style="margin-top: 16px;">Generate Route Quote</button>
 
             <div id="quote-result" style="display: none;" class="quote-box">
@@ -113,7 +144,7 @@
 
             <p style="font-size: 12px; color: var(--text-dim); margin-top: 12px; text-align: center; line-height: 1.4;"
                 id="quote-help">
-                Select a valid route segment on the tactical map to calculate dynamic pricing.
+                Plan and activate a route to watch high-frequency updates for its roads.
             </p>
         </div>
     </div>

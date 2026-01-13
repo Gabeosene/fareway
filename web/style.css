@@ -362,6 +362,64 @@ body.sim-view .live-only {
     height: 32px;
 }
 
+.marker-toggle {
+    gap: 8px;
+}
+
+.toggle-label {
+    font-family: var(--font-data);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+}
+
+.toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-track {
+    position: relative;
+    width: 38px;
+    height: 20px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid var(--glass-border);
+    transition: background 0.2s var(--ease-out), border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+}
+
+.toggle-track::after {
+    content: '';
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.2s var(--ease-out), background 0.2s var(--ease-out);
+}
+
+.toggle input:checked + .toggle-track {
+    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(16, 185, 129, 0.45);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.toggle input:checked + .toggle-track::after {
+    transform: translateX(18px);
+    background: var(--success);
+}
+
 /* Stats Panels */
 .stat-row {
     display: flex;
@@ -461,6 +519,13 @@ body.sim-view .live-only {
     transform: translateY(-1px);
 }
 
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 /* Primary Action */
 .btn.primary {
     background: rgba(14, 165, 233, 0.1);
@@ -521,6 +586,83 @@ body.sim-view .live-only {
     color: var(--primary);
     font-size: 20px;
     border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.route-panel {
+    margin-top: 16px;
+    padding: 12px;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.route-header {
+    font-family: var(--font-data);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+}
+
+.route-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+}
+
+.route-row:last-of-type {
+    border-bottom: none;
+}
+
+.route-label {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.route-value {
+    font-family: var(--font-data);
+    color: var(--text-main);
+    text-align: right;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.route-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.route-actions .btn {
+    margin-top: 0;
+}
+
+.route-summary {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.route-summary.route-active {
+    color: var(--success);
+}
+
+.route-summary-error {
+    color: var(--accent);
+}
+
+.route-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
 }
 
 /* Quote Result Pulse */

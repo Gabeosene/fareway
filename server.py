@@ -14,8 +14,10 @@ from collections import deque
 import manager
 import generator
 from simulation_controller import SimulationController
+from route_planner import RoutePlanner
 from connectors.live_source import LiveAPISource
 from connectors.bkk_source import BkkLiveSource
+from connectors.tomtom_source import TomTomSource
 from schemas import MetricType, TwinObservation
 
 # --- Initialize System ---
@@ -29,6 +31,9 @@ mgr.agent_aggressiveness = 1.0
 # Initialize Controller
 sim_controller = SimulationController(mgr, gen)
 sim_controller.start()
+
+def _get_sim_time() -> float:
+    return getattr(sim_controller, "sim_time", time.time())
 
 # Initialize Live Connector
 live_source = None
@@ -71,8 +76,33 @@ if bkk_api_key:
     )
     bkk_source.start()
 else:
-    live_source = LiveAPISource(mgr.adapter, list(mgr.twin.links.keys()))
+    # Check for TomTom
+    tomtom_key = os.getenv("TOMTOM_API_KEY")
+    if tomtom_key:
+        tomtom_interval = float(os.getenv("TOMTOM_POLL_INTERVAL", "5.0"))
+        print(f"[Server] Initializing TomTom Source (Interval: {tomtom_interval}s)")
+        live_source = TomTomSource(
+            mgr.adapter, 
+            list(mgr.twin.links.values()), 
+            api_key=tomtom_key,
+            poll_interval=tomtom_interval
+        )
+    else:
+        # Fallback to dummy
+        print("[Server] No Live Keys found (BKK or TomTom). Using Mock Live Source.")
+        live_source = LiveAPISource(mgr.adapter, list(mgr.twin.links.keys()))
+    
     live_source.start()
+
+# Route Planner
+route_connect_threshold_m = float(os.getenv("ROUTE_CONNECT_THRESHOLD_M", "40"))
+route_cell_size_m = float(os.getenv("ROUTE_CELL_SIZE_M", "80"))
+route_planner = RoutePlanner(
+    list(mgr.twin.links.values()),
+    connect_threshold_m=route_connect_threshold_m,
+    cell_size_m=route_cell_size_m,
+)
+active_route = None
 
 # Analytics State
 history = deque(maxlen=60)
@@ -81,6 +111,16 @@ history = deque(maxlen=60)
 class LiveLinksUpdate(BaseModel):
     link_ids: list[str] = []
     mode: Optional[str] = None
+
+class RoutePlanRequest(BaseModel):
+    start_link_id: str
+    end_link_id: str
+
+class RouteActivateRequest(BaseModel):
+    link_ids: list[str] = []
+    start_link_id: Optional[str] = None
+    end_link_id: Optional[str] = None
+    total_length_m: Optional[float] = None
 
 # Background History Loop
 def history_updater():
@@ -128,7 +168,7 @@ def get_service_status():
 def control_sim(action: str = Body(..., embed=True), speed: Optional[float] = Body(None, embed=True)):
     """
     Control the simulation loop.
-    Action: START, GRAVITY_PAUSE, RESUME, STEP
+    Action: PAUSE, RESUME, PLAY, STEP, SPEED
     Speed: Float multiplier (e.g. 1.0, 2.0, 5.0)
     """
     action = action.upper()
@@ -150,6 +190,36 @@ def control_sim(action: str = Body(..., embed=True), speed: Optional[float] = Bo
         "speed": sim_controller.time_scale
     }
 
+def _build_link_payload(link, now: float, cap_mod: float, include_coords: bool = False) -> dict:
+    eff_cap = int(link.capacity * cap_mod)
+    eff_ci = link.current_flow / eff_cap if eff_cap > 0 else 1.0
+
+    age_sec = None
+    if link.last_observation_ts:
+        age_sec = max(0.0, now - link.last_observation_ts)
+
+    last_source = link.last_observation_source if link.last_observation_ts else None
+
+    link_payload = {
+        "id": link.id,
+        "name": link.name,
+        "flow": int(link.current_flow),
+        "capacity": eff_cap,
+        "ci": round(eff_ci, 2),
+        "price": link.current_price,
+        "price_multiplier": round(link.price_multiplier, 2),
+        "status": "CONGESTED" if eff_ci > 0.8 else "FLOWING",
+        "type": getattr(link, "type", "road"),
+        "diversion": int(getattr(link, "last_diversion", 0)),
+        "is_live": link.id in mgr.policy.p_config.get('live_mode_links', []),
+        "last_observation_at": link.last_observation_ts,
+        "last_observation_source": last_source,
+        "age_sec": age_sec
+    }
+    if include_coords:
+        link_payload["coordinates"] = link.coordinates
+    return link_payload
+
 @app.get("/live")
 def get_live_state(include_coords: bool = False):
     """Returns the full state of the Digital Twin."""
@@ -160,35 +230,8 @@ def get_live_state(include_coords: bool = False):
     if gen.weather == "RAIN": cap_mod = 0.9
     elif gen.weather == "STORM": cap_mod = 0.75
 
-    for l_id, link in mgr.twin.links.items():
-        eff_cap = int(link.capacity * cap_mod)
-        eff_ci = link.current_flow / eff_cap if eff_cap > 0 else 1.0
-        
-        age_sec = None
-        if link.last_observation_ts:
-            age_sec = max(0.0, now - link.last_observation_ts)
-
-        last_source = link.last_observation_source if link.last_observation_ts else None
-
-        link_payload = {
-            "id": l_id,
-            "name": link.name,
-            "flow": int(link.current_flow),
-            "capacity": eff_cap,
-            "ci": round(eff_ci, 2),
-            "price": link.current_price,
-            "price_multiplier": round(link.price_multiplier, 2),
-            "status": "CONGESTED" if eff_ci > 0.8 else "FLOWING",
-            "type": getattr(link, "type", "road"),
-            "diversion": int(getattr(link, "last_diversion", 0)),
-            "is_live": l_id in mgr.policy.p_config.get('live_mode_links', []),
-            "last_observation_at": link.last_observation_ts,
-            "last_observation_source": last_source,
-            "age_sec": age_sec
-        }
-        if include_coords:
-            link_payload["coordinates"] = link.coordinates
-        network_state.append(link_payload)
+    for link in mgr.twin.links.values():
+        network_state.append(_build_link_payload(link, now, cap_mod, include_coords=include_coords))
     
     return {
         "timestamp": now,
@@ -250,6 +293,82 @@ def set_live_links(update: LiveLinksUpdate):
     _apply_live_links(valid)
     return {"live_mode_links": valid, "unknown_links": unknown}
 
+# --- ROUTE PLANNING ---
+
+@app.post("/route/plan")
+def plan_route(req: RoutePlanRequest):
+    try:
+        plan = route_planner.plan(req.start_link_id, req.end_link_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not plan:
+        raise HTTPException(status_code=404, detail="No route found between selected links")
+    return {
+        "start_link_id": req.start_link_id,
+        "end_link_id": req.end_link_id,
+        "link_ids": plan.link_ids,
+        "link_count": len(plan.link_ids),
+        "total_length_m": round(plan.total_length_m, 1),
+        "visited_nodes": plan.visited_nodes,
+    }
+
+@app.post("/route/activate")
+def activate_route(req: RouteActivateRequest):
+    global active_route
+    if not req.link_ids:
+        raise HTTPException(status_code=400, detail="No route link_ids provided")
+    valid = [link_id for link_id in req.link_ids if link_id in mgr.twin.links]
+    unknown = [link_id for link_id in req.link_ids if link_id not in mgr.twin.links]
+    if not valid:
+        raise HTTPException(status_code=400, detail="No valid links in route")
+    length_m = req.total_length_m
+    if length_m is None:
+        length_m = route_planner.route_length(valid)
+    active_route = {
+        "link_ids": valid,
+        "link_count": len(valid),
+        "total_length_m": round(length_m, 1),
+        "start_link_id": req.start_link_id,
+        "end_link_id": req.end_link_id,
+        "activated_at": time.time(),
+    }
+    _apply_live_links(valid)
+    return {"active": True, "route": active_route, "unknown_links": unknown}
+
+@app.get("/route/active")
+def get_active_route():
+    if not active_route:
+        return {"active": False, "route": None}
+    return {"active": True, "route": active_route}
+
+@app.get("/route/live")
+def get_route_live(include_coords: bool = False):
+    if not active_route or not active_route.get("link_ids"):
+        return {"active": False, "route": None, "links": []}
+
+    now = time.time()
+    cap_mod = 1.0
+    if gen.weather == "RAIN":
+        cap_mod = 0.9
+    elif gen.weather == "STORM":
+        cap_mod = 0.75
+
+    links = []
+    for link_id in active_route["link_ids"]:
+        link = mgr.twin.links.get(link_id)
+        if not link:
+            continue
+        links.append(_build_link_payload(link, now, cap_mod, include_coords=include_coords))
+
+    return {
+        "timestamp": now,
+        "sim_time": gen.get_virtual_time(getattr(sim_controller, "sim_time", None)),
+        "weather": gen.weather,
+        "active": True,
+        "route": active_route,
+        "links": links,
+    }
+
 # --- ADMIN / GOD MODE ---
 
 @app.post("/admin/agent/aggressiveness/{level}")
@@ -282,7 +401,7 @@ def trigger_accident(link_id: Optional[str] = None):
     if link_id not in mgr.twin.links:
         raise HTTPException(status_code=404, detail="Link not found")
     
-    gen.trigger_accident(link_id)
+    gen.trigger_accident(link_id, current_time=_get_sim_time())
     return {"message": f"Accident simulated on {link_id}"}
 
 @app.post("/admin/weather/{weather_type}")
@@ -294,7 +413,7 @@ def set_weather(weather_type: str):
 
 @app.post("/admin/event/{event_name}")
 def trigger_event(event_name: str):
-    gen.active_events[event_name] = time.time() + 15.0
+    gen.trigger_event(event_name, current_time=_get_sim_time())
     return {"message": f"Event {event_name} started"}
 
 @app.get("/stats/history")
@@ -350,14 +469,15 @@ def ingest_speed(link_id: str = Body(..., embed=True), speed: float = Body(..., 
         metric=MetricType.SPEED_KMH,
         value=speed
     )
-    mgr.adapter.ingest(obs)
+    accepted = mgr.adapter.ingest(obs)
     
     # Return the calculated flow for debugging visibility
     link = mgr.twin.links.get(link_id)
     current_flow = link.current_flow if link else -1
     
     return {
-        "status": "accepted",
+        "status": "accepted" if accepted else "dropped",
+        "accepted": accepted,
         "link": link_id,
         "input_speed": speed,
         "translated_flow": current_flow

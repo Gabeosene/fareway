@@ -93,3 +93,19 @@ A lightweight "digital twin" system that manages traffic demand by creating a fe
 
  **Optional: CLI (`simulate.py`)**
 *   Interactive dashboard showing the loop in action.
+
+---
+
+## 7. Route Planning + Focused Updates
+
+**Goal:** let the client plan a route across link geometry, activate it as the live-only set, and poll those links at a higher frequency without flooding the full network feed.
+
+**Endpoints (in `server.py`):**
+* `POST /route/plan` -> pathfind between `start_link_id` and `end_link_id`, returns ordered `link_ids` + length.
+* `POST /route/activate` -> sets the active route and switches live mode to only those links.
+* `GET /route/active` -> returns the current in-memory active route for the session.
+* `GET /route/live` -> fast, route-only telemetry payload for higher-frequency polling.
+
+**Frontend (`web/js/App.js`):**
+* Click two links to set start/end, plan a route, then activate it.
+* The active route drives live mode and a faster poll loop (~3 Hz) to `/route/live`.

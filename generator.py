@@ -72,6 +72,21 @@ class TrafficGenerator:
         
         return f"{hours:02d}:{minutes:02d}"
 
-    def trigger_accident(self, link_id: str, duration: float = 8.0):
+    def trigger_accident(
+        self,
+        link_id: str,
+        duration: float = 8.0,
+        current_time: Optional[float] = None,
+    ):
         """Triggers a massive congestion spike on the link for `duration` seconds."""
-        self.accidents[link_id] = time.time() + duration
+        now = current_time if current_time is not None else time.time()
+        self.accidents[link_id] = now + duration
+
+    def trigger_event(
+        self,
+        event_name: str,
+        duration: float = 15.0,
+        current_time: Optional[float] = None,
+    ):
+        now = current_time if current_time is not None else time.time()
+        self.active_events[event_name] = now + duration

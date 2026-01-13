@@ -37,6 +37,7 @@ class Quote:
     user_id: str
     route_id: str
     base_price: int
+    price_multiplier: float
     final_price: int
     discount_amount: int
     discount_reason: str
@@ -183,6 +184,7 @@ class PolicyEngine:
             user_id=user.id,
             route_id=link_id,
             base_price=base_price,
+            price_multiplier=link.price_multiplier,
             final_price=final_price,
             discount_amount=discount,
             discount_reason=reason,

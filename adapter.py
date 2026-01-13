@@ -18,21 +18,26 @@ class TwinAdapter:
     def set_live_links(self, link_ids):
         self.live_mode_links = set(link_ids or [])
 
-    def ingest(self, obs: TwinObservation):
+    def _is_live_source(self, source: str) -> bool:
+        source = (source or "").lower()
+        return source.startswith(("live", "api", "bkk", "tomtom"))
+
+    def ingest(self, obs: TwinObservation) -> bool:
         # 1. Routing Strategy: Hybrid Mode
         # If a link is set to "Live Mode", ignore Synthetic (sim) inputs
-        is_sim = obs.source.startswith("sim")
-        is_live = obs.source.startswith("live") or obs.source.startswith("api")
+        source = (obs.source or "").lower()
+        is_sim = source.startswith("sim")
+        is_live = self._is_live_source(source)
         if obs.link_id in self.live_mode_links:
             if is_sim:
-                return # Block synthetic data for live links
+                return False # Block synthetic data for live links
         elif is_live:
-            return # Block live data for simulated links
+            return False # Block live data for simulated links
         
         # 2. Validation
         if obs.link_id not in self.mgr.twin.links:
             # logger.warning(f"Unknown link ID: {obs.link_id}")
-            return
+            return False
 
         # 3. Physics Translation
         final_flow = 0
@@ -49,7 +54,7 @@ class TwinAdapter:
              # We don't have Distance readily available in simple Link model (only coords).
              # For now, let's assume we can't reliably do this without length.
              # SKIP.
-             return
+             return False
 
         # 4. Update Twin
         # We apply the update immediately. 
@@ -60,6 +65,7 @@ class TwinAdapter:
             source=obs.source,
             timestamp=obs.timestamp
         )
+        return True
 
     def _speed_to_flow(self, speed_kmh: float, link) -> int:
         """

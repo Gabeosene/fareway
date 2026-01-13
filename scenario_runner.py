@@ -85,8 +85,9 @@ def run_scenario():
     q_surge = post_json("/api/quote", {"user_id": "u_std", "link_id": "link_szechenyi"})
     if q_surge:
         s_price = q_surge.get('final_price')
-        mult = q_surge.get('price_multiplier', 1.0)
-        console.print(f"Surge Quote (Standard User): [bold red]{s_price} HUF[/bold red] (Multiplier: x{mult:.1f})")
+        mult = q_surge.get('price_multiplier')
+        mult_text = f" (Multiplier: x{mult:.1f})" if isinstance(mult, (int, float)) else ""
+        console.print(f"Surge Quote (Standard User): [bold red]{s_price} HUF[/bold red]{mult_text}")
     
     # Equity User (Eva)
     q_equity = post_json("/api/quote", {"user_id": "u_eq", "link_id": "link_szechenyi"})
